@@ -1,0 +1,48 @@
+Flux Reader 0.2.0-alpha.13 — validation
+versionCode: 20016
+focus: Smart Speed 3.0 + immersive full-screen Speed Reader
+
+PASSED IN CURRENT ENVIRONMENT
+- static self-check (`bash scripts/selfcheck.command --static`)
+- version integrity: Gradle / VERSION.txt / build-info.json
+- XML parse
+- shell syntax
+- Kotlin Regex escape regression scan
+- Reader navigation parity guards retained
+- pure Kotlin compile: Models.kt + SpeedReaderCursor.kt
+- Smart Speed 3 smoke test: semantic sentence navigation
+- Smart Speed 3 smoke test: paragraph navigation
+- Smart Speed 3 smoke test: pause context extraction
+- Smart Speed 3 smoke test: adaptive PHRASE/FOCUS chunk density
+- delimiter/string/comment structural scan: SpeedReaderScreen.kt
+- delimiter/string/comment structural scan: AppViewModel.kt
+- delimiter/string/comment structural scan: ReaderSettingsRepository.kt
+- immersive UI wiring: WindowInsetsCompat system-bar hide/show + transient swipe behavior
+- fullscreen minimal controls wiring: previous sentence / Play-Pause / next sentence / exit
+- long-pause smart rewind wiring and persisted threshold
+- adaptive fixation setting persistence and sanitization
+- existing Smart Speed 2 micro-pauses, sentence-length adjustment and acceleration retained
+- existing EPUB/FB2/PDF/OCR/theme/font guards retained
+
+SMART SPEED 3 SMOKE OUTPUT
+SMART_SPEED_3_OK second=20 third=48 paragraphs=25/46 complex=2 simple=4
+
+FULL ANDROID COMPILE
+- attempted `./gradlew :app:compileDebugKotlin --offline --console=plain`
+- Gradle wrapper still attempted to fetch Gradle 9.6.0 and failed because this isolated environment cannot resolve services.gradle.org (UnknownHostException)
+- therefore Android/Compose type-resolution and physical-device immersive-system-bar behavior remain to be verified on the user's Mac/Pixel
+
+EXPECTED MAC VERIFICATION
+scripts/selfcheck.command
+scripts/build-debug.command
+
+DEVICE CHECK (Pixel / Android 17)
+- enter Speed Reader full screen with the new fullscreen icon
+- confirm status bar, navigation bar and normal app chrome disappear
+- confirm only four bottom actions remain: previous sentence, Play/Pause, next sentence, exit full screen
+- swipe from an edge and verify Android system bars can appear transiently
+- press Android Back while fullscreen and verify it exits fullscreen before leaving Speed Reader
+- pause playback and verify surrounding context appears only when enabled
+- leave playback paused beyond the configured threshold, press Play and verify it rewinds to a sentence boundary
+- test PHRASE/FOCUS with adaptive fixation enabled on short prose, long words, numbers and URLs
+- test sentence and paragraph boundaries in Russian dialogue and abbreviation-heavy text

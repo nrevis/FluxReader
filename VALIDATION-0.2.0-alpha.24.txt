@@ -1,0 +1,26 @@
+Flux Reader 0.2.0-alpha.24 — validation
+versionCode: 20032
+
+PASS  scripts/selfcheck.command --static
+      - version/build markers
+      - Kotlin Regex/string regression scans
+      - existing Reader/Library/PDF regression guards
+      - alpha.20–alpha.23 guards
+      - alpha.24 grouped Speed Reader settings, image cues, chapter semantics,
+        3000 WPM, volume keys, title typography and JetBrains profile guards
+
+PASS  pure Kotlin smoke
+      - 3000 WPM range
+      - exact tapped-word offset preservation
+      - SpeedReaderDocument plain-text offset compatibility
+      - image cue preservation
+      - leading heading cluster skip after chapter intro
+
+PASS  patch dry-run and real apply against clean alpha.23 tree
+PASS  static self-check after applying alpha.23 -> alpha.24 patch
+
+LIMIT  Full Android/Compose compilation was attempted but Gradle Wrapper 9.6.0
+       is not cached in the isolated container. Wrapper download fails because
+       services.gradle.org cannot be resolved from this environment.
+       The supplied macOS self-check/install workflow performs the real
+       compile + unit tests where Android SDK 37 and network/cache are available.

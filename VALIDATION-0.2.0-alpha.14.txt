@@ -1,0 +1,50 @@
+Flux Reader 0.2.0-alpha.14 — validation
+versionCode: 20019
+base: alpha.13.2 (confirmed by user on macOS / Android SDK 37: assembleDebug + unit tests successful)
+focus: cover repair/extraction + Settings 2.0 + compact library home
+
+PASSED IN CURRENT ENVIRONMENT
+- bash scripts/selfcheck.command --static
+- XML parse
+- shell syntax
+- Kotlin normal-string Regex escape regression scan
+- Kotlin unit-test string-literal regression scan
+- Android XMLConstants / Compose weight regression guards retained
+- Reader navigation parity guard retained
+- pure Kotlin compile: Models.kt + SmartBookImport.kt
+- SmartBookImportTest compiles and executes with a minimal local JUnit API stub
+- EPUB 2 guide -> XHTML wrapper -> nested raster cover smoke: PASS
+- selected Smart Speed 3.0 navigation/adaptive tests: PASS
+- modified Kotlin brace/parenthesis structural checks: PASS
+- no direct deprecated statusBarColor/navigationBarColor assignment remains
+- no deprecated explicit foundation.layout.weight import
+
+COVER BEHAVIOR ADDED
+- EPUB3 properties=cover-image
+- EPUB2 meta name=cover
+- EPUB2 guide/reference type=cover
+- XHTML/HTML wrapper <img>, SVG <image href/xlink:href>, object data
+- heuristic manifest raster fallback
+- automatic repair for old books with missing cover files
+- PDF page 1 automatic cover
+- deterministic generated cover fallback for no-artwork books
+- manual custom covers protected from forced automatic rescan
+- decode bounds/downsample before persisted JPEG
+
+UI ADDED
+- LibraryViewMode.COMPACT
+- compact cards and collapsed compact filters
+- categorized Settings: Quick / Appearance / Reading / Library / Speed / OCR / About
+- quick cover rescan access
+- full-screen Speed Reader control auto-hide
+
+FULL ANDROID GRADLE BUILD
+- not rerun in this isolated container because the Gradle 9.6 wrapper distribution cannot be resolved from services.gradle.org here.
+- alpha.13.2 is the last fully verified Android SDK 37 baseline from the user's Mac.
+
+EXPECTED MAC VERIFICATION
+scripts/selfcheck.command
+scripts/build-debug.command
+
+Expected APK:
+dist/FluxReader-0.2.0-alpha.14-debug.apk

@@ -1,0 +1,39 @@
+Flux Reader 0.2.0-alpha.16.1 — validation
+versionCode: 20023
+focus: grouped-library book-card callback compile hotfix
+
+OBSERVED FROM REAL ANDROID SDK 37 BUILD (user Mac, alpha.16)
+- :app:compileDebugKotlin failed in LibraryScreen.kt lines 656 and 660.
+- Kotlin reported missing onEdit and a trailing lambda where Boolean showFolderPath was expected.
+- Cause: BookGridCard/CompactBookCard have onEdit followed by optional showFolderPath; a trailing lambda cannot target onEdit because it is not the final parameter.
+
+FIXED IN ALPHA.16.1
+- CompactBookCard grouped-view call now uses onEdit = { onEdit(book) }.
+- BookGridCard grouped-view call now uses onEdit = { onEdit(book) }.
+- All call sites for both card composables were audited.
+- selfcheck rejects the two unsafe trailing-lambda forms before Gradle.
+- alpha.16 folder hierarchy / EPUB nested-list / measured typography behavior is unchanged.
+
+PASSED IN CURRENT ENVIRONMENT
+- bash scripts/selfcheck.command --static
+- version/build-info integrity
+- XML parse
+- shell syntax
+- Kotlin regex/string regression scans
+- Compose/XML import guards
+- Library card callback signature guard
+- Reader navigation parity guards
+- alpha.14 cover/settings guards
+- alpha.15 fullscreen/cutout/pagination guards
+- alpha.16 folder hierarchy/typography/EPUB structure guards
+- clean archive integrity via unzip -t
+
+FULL ANDROID GRADLE BUILD
+- not available in this isolated environment.
+- verify on the user macOS Android SDK 37 environment:
+  scripts/selfcheck.command
+  scripts/build-debug.command
+
+EXPECTED RESULT
+- The four errors at LibraryScreen.kt:656/660 (NO_VALUE_FOR_PARAMETER / Boolean mismatch) are gone.
+- Any later compiler error, if present, is a separate deeper issue and should be fixed from the real SDK 37 log.

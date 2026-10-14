@@ -1,0 +1,53 @@
+Flux Reader 0.2.0-alpha.12 — validation
+versionCode: 20015
+focus: Smart Speed 2.0 / punctuation micro-pauses / adaptive sentence timing / gradual acceleration
+
+PASSED IN CURRENT ENVIRONMENT
+- static self-check (`bash scripts/selfcheck.command --static`)
+- XML parse
+- shell syntax via bash parser
+- Kotlin normal-string Regex escape regression scan
+- version integrity: Gradle / VERSION.txt / build-info.json
+- existing Reader navigation parity guards retained
+- pure Kotlin compile: Models.kt + SpeedReaderCursor.kt
+- Smart Speed smoke: sentence-end micro-pause increases delay after the displayed sentence-ending chunk
+- micro-pause is applied after the current chunk, so the final word remains visible for the processing window
+- adaptive sentence-end timing gives longer sentences a bounded additional delay
+- SMART < DEEP semantic timing relationship retained
+- gradual acceleration starts at configured percentage, follows smoothstep, reaches target WPM and never overshoots
+- settings persistence wiring for micro-pauses, sentence/clause/paragraph delays, adaptive sentence bonus, long-word slowdown and acceleration
+- three rhythm presets wired: Gentle / Balanced / Comprehension
+- modified Kotlin source brace/parenthesis structural checks passed
+
+REFERENCE BEHAVIOUR USED FOR DESIGN
+- Reedy publicly documents smart slowing at punctuation and complicated words, gradual acceleration, and sentence/paragraph navigation.
+- Other current RSVP readers expose punctuation/paragraph pause tuning.
+- Published descriptions of Spritz report longer display time for longer words and longer sentence-end pauses for longer sentences.
+- Exact Reedy timing constants are not public; Flux Reader uses its own configurable defaults rather than claiming to reproduce them.
+
+DEFAULT BALANCED RHYTHM
+- sentence end: 170 ms
+- clause/comma: 65 ms (semicolon/colon slightly stronger; dash slightly lighter)
+- paragraph extra pause: 260 ms
+- long-sentence extra: up to 120 ms
+- long-word slowdown: +18% baseline tuning
+- acceleration: 72% -> target WPM over 5 s
+
+FULL ANDROID COMPILE
+- attempted `./gradlew :app:compileDebugKotlin --console=plain`
+- Gradle wrapper could not download Gradle 9.6.0 because this isolated container cannot resolve services.gradle.org
+- full Compose/Android compile and device behaviour therefore remain to be verified on the user's Mac
+
+EXPECTED MAC VERIFICATION
+scripts/selfcheck.command
+scripts/build-debug.command
+
+DEVICE CHECK
+- at 250 / 500 / 900 WPM verify a visible but short pause after `. ! ? …`
+- verify comma pause is shorter than sentence end; `;` and `:` slightly stronger than comma
+- verify abbreviations such as `см.` and `т.д.` do not create false sentence pauses
+- verify paragraph pause is additive and can be disabled independently
+- compare Gentle / Balanced / Comprehension rhythm presets
+- disable micro-pauses and confirm Smart still slows difficult/long words without punctuation stops
+- disable gradual acceleration and confirm target WPM starts immediately
+- resume Play with acceleration enabled and confirm smooth ramp rather than a first-frame jump

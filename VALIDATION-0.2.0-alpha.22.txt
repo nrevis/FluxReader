@@ -1,0 +1,21 @@
+Flux Reader 0.2.0-alpha.22 — validation
+versionCode: 20030
+
+Implemented:
+  - integer whole-line page grid for Screen Paging;
+  - line budget recalculated from viewport height, vertical padding, current font/line-height metrics and bottom safety reserve;
+  - pixel remainder below the last complete row is intentionally unused;
+  - measured layout is capped by remaining page line slots;
+  - final row uses ceil(TextLayoutResult.getLineBottom()) and is accepted only when fully inside the available height;
+  - existing word-boundary, heading keep-with-body and widow/orphan protections are preserved.
+
+Checks completed in build workspace:
+  PASS  scripts/selfcheck.command --static
+  PASS  pure Kotlin compile of ReaderPageGrid.kt
+  PASS  pure Kotlin ReaderPageGrid smoke: 880px viewport / 20px vertical padding / 30px line / 15px safety => 27 lines, 810px snapped content, 15px remainder
+  PASS  smoke verifies larger font and larger vertical margins reduce the line budget
+
+Android build note:
+  Full Android/Compose Gradle compile cannot be completed in this isolated environment because Android SDK / Gradle distribution are not present here. The supplied selfcheck/build scripts run compile + unit tests on the user's configured macOS Android SDK environment.
+
+Package verification is performed after packaging; see the delivered ZIP/patch alongside this file.

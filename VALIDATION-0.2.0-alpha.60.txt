@@ -1,0 +1,14 @@
+Flux Reader 0.2.0-alpha.60 validation
+
+- versionName 0.2.0-alpha.60 / versionCode 20077.
+- Static self-check: PASS.
+- XML parse: PASS.
+- Shell syntax: PASS.
+- Wasteland startup geometry guards: PASS.
+- Wasteland route root receives full minimum constraints (`propagateMinConstraints = true`).
+- Wasteland interactive CRT viewport respects `WindowInsets.safeDrawing`.
+- Library, Reader, PDF Reader, Speed Reader and Settings Scaffolds explicitly fill the available route viewport.
+- Wasteland Library legacy FAB bottom clearance reduced so imported books use the restored viewport.
+- Existing library persistence/storage code was not changed.
+- Gradle wrapper package integrity: PASS.
+- Full Gradle/Android compile: not executed here because no Android SDK is installed in this environment.

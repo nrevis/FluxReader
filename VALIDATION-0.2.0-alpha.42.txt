@@ -1,0 +1,9 @@
+Flux Reader 0.2.0-alpha.42 validation
+
+- version/build-info/static clean-line: checked
+- nested Reader settings Back -> parent guard: checked
+- nested Speed settings Back -> hub guard: checked
+- shared modal header / explicit close guards: checked
+- shared destructive confirmation guards: checked
+- historical regression guards: checked by scripts/selfcheck.command --static
+- full Android compile: not run in this container because Android SDK 37 is unavailable

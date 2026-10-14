@@ -1,0 +1,10 @@
+Flux Reader 0.2.0-alpha.25 — validation
+
+PASS  scripts/selfcheck.command --static
+PASS  XML parse / shell syntax / Kotlin string-regression scans
+PASS  alpha.25 static guards: speedFixedFontSizeV11, speedHorizontalFocusFractionV11, shared horizontal focus geometry
+PASS  pure Kotlin smoke: SpeedViewportGeometry.horizontalFocusPx 30% -> 300/1000 px; clamp 18..50%; vertical geometry unchanged
+PASS  source inspection: RSVP uses one font size when speedFixedFontSize=true; ORP and guide share speedHorizontalFocusFraction
+BLOCKED full Gradle/Compose compile in this environment: Gradle wrapper 9.6.0 is not cached and services.gradle.org DNS is unavailable.
+
+User-side build should run scripts/selfcheck.command, which executes the Android/Compose compile and unit tests when the SDK/Gradle distribution are available.

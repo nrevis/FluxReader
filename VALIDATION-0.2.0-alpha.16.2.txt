@@ -1,0 +1,44 @@
+Flux Reader 0.2.0-alpha.16.2 — validation
+versionCode: 20024
+focus: fullscreen text viewport isolation + camera HUD + unified file/folder import
+
+FIXED / CHANGED
+- Fullscreen Reader no longer overlays ReaderCutoutStatus on top of book content.
+- Fullscreen is laid out as HUD + weighted ReaderContent viewport.
+- ReaderContent fullscreen branch does not add a second top safe inset; the parent HUD owns that region.
+- Permanent fullscreen viewport guard: 10 dp top / 6 dp bottom outside LazyColumn scroll content.
+- One-time measured-line snap when entering fullscreen, including free-scroll mode.
+- Fullscreen free-scroll settles to a measured line after scrolling stops.
+- Camera HUD uses a minimum camera band and leaves the center empty; progress is left, chapter position right.
+- Library uses one Add FAB and a dialog for file vs folder import.
+- Recursive folder import / subfolder hierarchy from alpha.16 is unchanged.
+
+PASSED IN CURRENT ENVIRONMENT
+- bash scripts/selfcheck.command --static
+- version/build-info integrity
+- XML parse
+- shell syntax
+- Kotlin string/regex regression scans
+- Android XMLConstants / Compose layout import guards
+- Library card callback signature guards
+- Reader navigation parity guards
+- cover/settings/compact library guards
+- fullscreen safe-area / cutout / measured-line guards
+- folder hierarchy / EPUB nested-list structure guards
+- alpha.16.2 dedicated viewport / camera HUD / unified import guards
+- pure Kotlin compile and selected tests for Models, SmartBookImport, LibraryFolderTree, EpubParser, ReaderPageMath, SearchEngine, SpeedReaderCursor and TxtParser
+- pure test result: ALL_PURE_KOTLIN_TESTS_OK
+- parser-level scan of ReaderScreen.kt + LibraryScreen.kt: no syntax-level “expecting” / unclosed / unexpected-token findings
+
+FULL ANDROID GRADLE BUILD
+- not run in this isolated container because the Android SDK 37 project environment is not available here.
+- verify on the user macOS environment:
+  scripts/selfcheck.command
+  scripts/build-debug.command
+
+DEVICE CHECKS
+- Enter fullscreen from a position where the current paragraph is partially scrolled: first visible row must settle to a complete line.
+- Swipe/scroll in fullscreen and release between rows: resting top row must be complete.
+- Page forward/backward several times: HUD must not reduce or overlap text viewport.
+- Confirm left progress and right chapter indicator sit in the camera band without center content.
+- Library Add button -> file import and folder import both launch their existing SAF pickers.

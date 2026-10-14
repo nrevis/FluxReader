@@ -1,0 +1,21 @@
+Flux Reader 0.2.0-alpha.38 validation
+=====================================
+
+Validated in the model container:
+- scripts/selfcheck.command --static: PASS
+- XML parse checks: PASS
+- shell syntax checks: PASS
+- Gradle Wrapper JAR/properties integrity: PASS
+- ReaderPreviewPolicy pure-Kotlin smoke: PASS
+- PreparedReaderPaginationCache incomplete-preview smoke: PASS
+- versionName/versionCode/build-info consistency: PASS
+- alpha.14-alpha.38 regression guards: PASS
+
+Not claimed as validated here:
+- Android :app:compileDebugKotlin / compileReleaseKotlin
+- unit tests through Gradle
+- APK assemble/install
+
+Reason: this container has no Android SDK configured and the required Gradle 9.6 distribution
+is not cached. Network access is disabled, so Gradle Wrapper cannot download it. Run
+scripts/selfcheck.command on the macOS development machine to execute the real Android build checks.

@@ -1,0 +1,31 @@
+Flux Reader 0.2.0-alpha.6 — validation
+versionCode: 20009
+focus: discrete reader page pagination
+
+PASSED IN CURRENT ENVIRONMENT
+- XML parse
+- shell syntax via bash parser (zsh is unavailable in this container)
+- Kotlin normal-string Regex escape regression scan
+- version integrity: Gradle / VERSION.txt / build-info.json
+- no animateScrollBy / scrollBy reader page navigation
+- unified button / edge tap / horizontal swipe page-controller wiring
+- readerChapterAt exact cross-chapter return anchor wiring
+- rapid page-navigation job cancellation wiring
+- page-history reset on layout-affecting reader settings
+- pure-Kotlin ReaderPageMath compile + smoke tests
+- modified ReaderScreen/AppViewModel brace/parenthesis structural checks
+- clean archive scan excludes build/.gradle/local.properties/dist
+
+PAGE MATH SMOKE CASES
+- long text block: page forward stays inside the same block and advances by one measured viewport
+- mixed blocks: next page anchors inside the block crossing the page boundary
+- backwards inside a long block
+- document-start previous page returns no anchor
+
+NOT VERIFIED HERE
+- full Android Gradle compile/assembleDebug: this container does not provide Android SDK 37 / complete Android build environment
+- physical-device gesture feel and OEM touch behavior
+
+EXPECTED USER-MAC VERIFICATION
+scripts/selfcheck.command
+scripts/build-debug.command

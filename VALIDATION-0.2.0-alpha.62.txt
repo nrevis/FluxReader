@@ -1,0 +1,11 @@
+Flux Reader 0.2.0-alpha.62 validation
+
+- versionName 0.2.0-alpha.62 / versionCode 20079.
+- Source-level compiler regression at LibraryScreen.kt:598 fixed.
+- Root LibraryScreen declares libraryBottomContentPadding in the same scope as GRID/LIST content.
+- Root LibraryScreen declares a separate compact padding value for COMPACT content.
+- FolderLibrary retains its own local bottomContentPadding resolved from LocalFluxThemeMode.
+- No bare root-scope `bottomContentPadding` reference remains.
+- alpha.60 Wasteland viewport and safeDrawing changes retained.
+- Static self-check is run during packaging.
+- Full Android/Gradle compilation is not available in this container because Android SDK is unavailable.

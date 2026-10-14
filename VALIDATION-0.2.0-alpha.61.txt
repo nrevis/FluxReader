@@ -1,0 +1,10 @@
+Flux Reader 0.2.0-alpha.61 validation
+
+- versionName 0.2.0-alpha.61 / versionCode 20078.
+- Source-level compiler regression at LibraryScreen.kt:1340: fixed.
+- FolderLibrary no longer references an out-of-scope `settings` symbol.
+- FolderLibrary resolves the active theme via LocalFluxThemeMode.current.
+- Folder GRID/COMPACT/LIST share the correct Wasteland/normal bottom padding policy.
+- alpha.60 full-screen Wasteland viewport and safeDrawing changes retained.
+- Static self-check: to be run during packaging.
+- Full Gradle/Android compile cannot be executed in this container because Android SDK is unavailable.

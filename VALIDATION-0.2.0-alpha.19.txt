@@ -1,0 +1,46 @@
+Flux Reader 0.2.0-alpha.19 — validation
+versionCode: 20027
+focus: visual polish / library-reader-speed-reader UI simplification
+
+PASSED IN CURRENT ENVIRONMENT
+- static self-check (`bash scripts/selfcheck.command --static`)
+- version/build-info integrity
+- XML parse
+- shell syntax
+- Kotlin regex/test-string regression scans
+- Android/Compose source guards retained through alpha.18
+- alpha.19 UI guards:
+  * Library top bar = `Библиотека` + count, no BuildConfig version badge
+  * theme cycling removed from Library chrome and remains in Settings/ReaderPreferences
+  * sort/group controls collapsed behind Tune
+  * Reader secondary actions use Material3 DropdownMenu
+  * FluxTheme owns shared Material3 Shapes and typography weights
+  * Speed Reader settings use simplified headings
+- delimiter/string scan of all changed UI Kotlin files
+- duplicate-import scan of all changed UI Kotlin files
+- parser-level kotlinc smoke of LibraryScreen / ReaderScreen / ReaderPreferences / SpeedReaderScreen / SettingsScreen / FluxTheme / PdfReaderScreen: no syntax diagnostics
+- pure Kotlin compile: Models + LibraryFolderTree + ReaderPageMath + SearchEngine + SpeedReaderCursor
+
+GRADLE / ANDROID BUILD STATUS
+- `./gradlew :app:compileDebugKotlin --offline` could not start because this isolated environment does not have the Gradle 9.6.0 wrapper distribution cached.
+- The wrapper attempted to reach services.gradle.org and failed with UnknownHostException because network/DNS is unavailable here.
+- This is an environment limitation, not a Kotlin compiler result.
+- Full Android SDK 37 / Compose compilation must therefore be confirmed on the user's macOS environment.
+
+EXPECTED MACOS VERIFICATION
+  cd ~/Downloads/FluxReader-0.2.0-alpha.19-clean
+  scripts/selfcheck.command
+  scripts/build-debug.command
+  scripts/install-debug.command
+
+DEVICE CHECK
+1. Library top bar should show `Библиотека` + book count only.
+2. Theme icon should no longer be in Library top bar.
+3. Tune in Search should expand/collapse sort and grouping controls.
+4. Grid/list cards should no longer show a separate Edit icon.
+5. Book/folder action dialogs should render compact icon rows rather than outlined action buttons.
+6. Reader top bar should show TOC / Search / reading settings / overflow; Speed Reader and fullscreen are in overflow.
+7. Reader footer should show compact `chapter/total • page/total`.
+8. Speed Reader top bar should contain fullscreen + settings only; pacing remains inside its settings sheet.
+9. Reader screen pre-pagination from alpha.17 must behave unchanged.
+10. Library copy/move/duplicate/export/delete operations from alpha.18 must behave unchanged.

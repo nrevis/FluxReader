@@ -1,0 +1,18 @@
+Flux Reader 0.2.0-alpha.39 validation
+
+PASS: version/build-info consistency (0.2.0-alpha.39 / 20052)
+PASS: accumulated static regression guards alpha.14 -> alpha.38
+PASS: alpha.39 duplicate-control/fullscreen consolidation guards
+PASS: alpha.39 memory-pressure guards (UI_HIDDEN / BACKGROUND only)
+PASS: XML parse
+PASS: shell syntax
+PASS: Kotlin string/escape regression scans
+PASS: Gradle Wrapper JAR/properties integrity
+PASS: Java available in validation container
+
+Not executed in this container:
+- Android SDK 37 Kotlin compile
+- Android unit tests through Gradle
+- assembleRelease
+Reason: Android SDK 37 / Gradle distribution are not available in the offline validation environment.
+Run `scripts/selfcheck.command` on the target macOS machine for the full compile/test/release pass.

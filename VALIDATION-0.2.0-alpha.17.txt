@@ -1,0 +1,43 @@
+Flux Reader 0.2.0-alpha.17 — validation
+versionCode: 20025
+focus: measured screen pre-pagination + persistent character anchors
+
+PASSED IN CURRENT ENVIRONMENT
+- bash scripts/selfcheck.command --static
+- version integrity: Gradle / VERSION.txt / build-info.json / build scripts
+- XML resource parse
+- shell syntax checks
+- Kotlin Regex/string regression scans
+- existing Reader navigation parity guards
+- alpha.14 cover/library/settings guards retained
+- alpha.15 safe-area/cutout/line-snap guards retained
+- alpha.16 typography/folder/EPUB guards retained
+- alpha.16.2 dedicated fullscreen viewport / camera HUD / unified import guards retained
+- alpha.17 guards:
+  * ReaderPagination.kt exists
+  * SCREEN_PAGING has PreparedReaderPagination path
+  * TextMeasurer + getLineBottom/getLineEnd page cuts
+  * measurement/rendering share buildReaderTextStyle
+  * character reading offset is stored in Models + LibraryRepository + AppViewModel
+  * prepared image pages are separate from text pages
+  * old LazyColumn navigation-mode page-boundary switch is absent
+- git diff --check
+- delimiter balance scan for ReaderScreen.kt, ReaderPagination.kt and AppViewModel.kt
+- pure Kotlin compile: Models.kt + ReaderPageMath.kt + SpeedReaderCursor.kt + SearchEngine.kt
+
+FULL ANDROID BUILD STATUS
+- scripts/selfcheck.command proceeds through all static checks and then stops at Android SDK discovery.
+- Android SDK 37 is not installed in this isolated environment (/home/oai/Library/Android/sdk absent).
+- Therefore :app:compileDebugKotlin / testDebugUnitTest / assembleDebug are NOT claimed as run here.
+
+REQUIRED MACOS / PIXEL VERIFICATION
+1. scripts/selfcheck.command
+2. scripts/build-debug.command
+3. Open the same EPUB/FB2 page that previously clipped at the bottom.
+4. Repeatedly turn forward/back in Screen Paging; every page edge should contain only whole rendered rows.
+5. Change font size, line height, margins and font family; the chapter should repaginate and stay near the same text.
+6. Enter/exit fullscreen; progress/page markers must stay at the sides of the camera area and text must remain below the HUD.
+7. Rotate portrait/landscape and verify re-pagination preserves the textual position.
+8. Cross a chapter boundary backward and confirm a long final paragraph opens on its final prepared page.
+9. Open/return from a footnote/internal EPUB/FB2 link and verify the exact textual position is restored.
+10. Verify Scroll mode still behaves as continuous scrolling.

@@ -1,0 +1,2160 @@
+package io.fluxreader.app.ui
+
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.fluxreader.app.AppViewModel
+import io.fluxreader.app.SpeedUiState
+import io.fluxreader.app.data.ReaderFontMode
+import io.fluxreader.app.data.ReaderSettings
+import io.fluxreader.app.data.ReaderThemeMode
+import io.fluxreader.app.data.useWastelandDesign
+import io.fluxreader.app.data.useCyberpunkDesign
+import io.fluxreader.app.data.SpeedFocusStyle
+import io.fluxreader.app.data.SpeedLowerSegmentMode
+import io.fluxreader.app.data.SpeedMode
+import io.fluxreader.app.data.SpeedPacingMode
+import io.fluxreader.app.data.SpeedProgressMode
+import io.fluxreader.app.reader.SpeedReaderCursor
+import io.fluxreader.app.reader.SpeedSpeechCheckpointPolicy
+import io.fluxreader.app.reader.SpeedSpeechNarrator
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import io.fluxreader.app.reader.SpeedMediaCue
+import kotlinx.coroutines.delay
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SpeedReaderScreen(
+    state: SpeedUiState,
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    title: String,
+    onBack: () -> Unit,
+    workspaceEmbedded: Boolean = false,
+    onImmersiveChanged: (Boolean) -> Unit = {},
+) {
+    val appScheme = MaterialTheme.colorScheme
+    val pal = LocalExperimentalColors.current
+    val wastelandTheme = settings.useWastelandDesign
+    val cyberTheme = settings.useCyberpunkDesign
+    val background = when {
+        wastelandTheme -> pal.background
+        cyberTheme -> pal.background
+        settings.speedUseReaderTheme -> appScheme.background
+        else -> Color(settings.speedBackgroundColorArgb)
+    }
+    val textColor = when {
+        wastelandTheme -> pal.text
+        cyberTheme -> pal.text
+        settings.speedUseReaderTheme -> appScheme.onBackground
+        else -> Color(settings.speedTextColorArgb)
+    }
+    val focusColor = when {
+        wastelandTheme -> pal.accent
+        cyberTheme -> pal.accent
+        settings.speedUseReaderTheme -> appScheme.primary
+        else -> Color(settings.speedFocusColorArgb)
+    }
+    val guideColor = when {
+        wastelandTheme -> pal.border.copy(alpha = 0.72f)
+        cyberTheme -> pal.secondary.copy(alpha = 0.72f)
+        settings.speedUseReaderTheme -> appScheme.onSurfaceVariant.copy(alpha = 0.42f)
+        else -> Color(settings.speedGuideColorArgb)
+    }
+    var settingsPanel by remember { mutableStateOf(SpeedSettingsPanel.NONE) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var speedTuningExpanded by rememberSaveable { mutableStateOf(false) }
+    var introVisible by remember { mutableStateOf(false) }
+    var introChapterIndex by rememberSaveable { mutableIntStateOf(-1) }
+    var playStartedAtMs by remember { mutableLongStateOf(0L) }
+    val localView = LocalView.current
+    val context = LocalContext.current
+    val speech = remember(context, state.bookId) { SpeedSpeechNarrator(context.applicationContext) }
+    val speechStatus by speech.status.collectAsState()
+    var voiceMode by rememberSaveable(state.bookId) { mutableStateOf(false) }
+    val visualChunk = if (voiceMode && state.chapterText.isNotBlank()) {
+        SpeedReaderCursor.next(state.chapterText, speechStatus.offset, 1)
+    } else null
+    val displayState = if (voiceMode && visualChunk != null) {
+        state.copy(chunk = visualChunk, playing = speechStatus.playing)
+    } else state
+    val displaySettings = if (voiceMode) settings.copy(speedMode = SpeedMode.RSVP) else settings
+
+    // TTS callbacks are valid checkpoints ONLY during an explicitly enabled voice session.
+    // A freshly-created narrator starts at offset 0: applying that offset while loading
+    // a saved Speed Reader chapter would overwrite the saved word on every entry.
+    speech.onSettledPosition = { at ->
+        if (SpeedSpeechCheckpointPolicy.acceptNarratorOffset(voiceMode, state.chapterText.length, at)) {
+            viewModel.speedSeekToOffset(at)
+        }
+    }
+    speech.onFinished = {
+        if (voiceMode && state.chapterText.isNotEmpty()) {
+            viewModel.speedSeekToOffset(state.chapterText.lastIndex.coerceAtLeast(0))
+        }
+    }
+    LaunchedEffect(settings.narrationVoiceId, settings.narrationRate, settings.narrationPitch) {
+        speech.configure(settings)
+    }
+    // Chapter/book switches must discard the old TTS cursor WITHOUT committing it.
+    // pause() emits a settled-position event and previously saved offset 0 here.
+    LaunchedEffect(state.bookId, state.chapterIndex) {
+        speech.setPosition(state.chunk?.startOffset ?: 0)
+        voiceMode = false
+    }
+    LaunchedEffect(state.chunk?.startOffset) {
+        if (voiceMode && !speech.status.value.playing) speech.setPosition(state.chunk?.startOffset ?: 0)
+    }
+    val togglePlayback: () -> Unit = {
+        if (voiceMode) {
+            if (speechStatus.playing) speech.pause()
+            else {
+                viewModel.speedPause()
+                speech.start(state.chapterText, speechStatus.offset.coerceIn(0, state.chapterText.length))
+            }
+        } else {
+            viewModel.speedToggle()
+        }
+    }
+    val toggleVoice: () -> Unit = {
+        if (voiceMode) {
+            speech.pause()
+            voiceMode = false
+        } else {
+            viewModel.speedPause()
+            speech.setPosition(state.chunk?.startOffset ?: 0)
+            voiceMode = true
+        }
+    }
+    val previousSentence: () -> Unit = {
+        if (voiceMode) speech.pause()
+        viewModel.speedPreviousSentence()
+    }
+    val nextSentence: () -> Unit = {
+        if (voiceMode) speech.pause()
+        viewModel.speedNextSentence()
+    }
+
+    // Speed reading is an active reading session: never let Android dim/lock the display here.
+    DisposableEffect(localView) {
+        val previousKeepScreenOn = localView.keepScreenOn
+        localView.keepScreenOn = true
+        onDispose { localView.keepScreenOn = previousKeepScreenOn }
+    }
+
+    BackHandler(enabled = isFullscreen) { isFullscreen = false }
+    FullscreenSystemBarsEffect(isFullscreen)
+    LaunchedEffect(isFullscreen) { onImmersiveChanged(isFullscreen) }
+    DisposableEffect(onImmersiveChanged) {
+        onDispose { onImmersiveChanged(false) }
+    }
+
+    LaunchedEffect(state.playing) {
+        playStartedAtMs = if (state.playing) SystemClock.elapsedRealtime() else 0L
+    }
+
+    LaunchedEffect(state.activeMedia?.offset, settings.speedImagePauseMs) {
+        if (state.activeMedia != null) {
+            delay(settings.speedImagePauseMs.toLong())
+            viewModel.speedDismissMedia(resume = true)
+        }
+    }
+
+    LaunchedEffect(state.chapterIndex, state.loading, settings.speedChapterIntroMs, voiceMode) {
+        if (!voiceMode && !state.loading && state.chunk != null && state.chapterIndex != introChapterIndex && settings.speedChapterIntroMs > 0) {
+            val resume = state.playing
+            if (resume) viewModel.speedPause()
+            introChapterIndex = state.chapterIndex
+            introVisible = true
+            delay(settings.speedChapterIntroMs.toLong())
+            introVisible = false
+            if (resume && state.activeMedia == null) viewModel.speedToggle()
+        }
+    }
+
+    DisposableEffect(speech) {
+        onDispose {
+            // The TTS word cursor can be ahead of the visual SpeedUiState chunk.
+            // Stop speech first so onSettledPosition commits the spoken word,
+            // then flush the updated Speed Reader checkpoint before leaving.
+            if (speech.status.value.playing) speech.pause()
+            viewModel.speedPause()
+            speech.close()
+        }
+    }
+
+    LaunchedEffect(
+        state.playing,
+        state.chapterIndex,
+        state.chunk?.startOffset,
+        state.chunk?.endOffset,
+        playStartedAtMs,
+        settings.speedWpm,
+        settings.speedPacingMode,
+        settings.speedParagraphPause,
+        settings.speedMicroPausesEnabled,
+        settings.speedSentencePauseMs,
+        settings.speedClausePauseMs,
+        settings.speedParagraphPauseMs,
+        settings.speedAdaptiveSentencePause,
+        settings.speedSentenceLengthBonusMs,
+        settings.speedLongWordSlowdownPercent,
+        settings.speedGradualAcceleration,
+        settings.speedAccelerationSeconds,
+        settings.speedAccelerationStartPercent,
+    ) {
+        val chunk = state.chunk
+        if (state.playing && chunk != null && !state.loading && state.error == null) {
+            val elapsed = if (playStartedAtMs > 0L) (SystemClock.elapsedRealtime() - playStartedAtMs).coerceAtLeast(0L) else 0L
+            val effectiveWpm = SpeedReaderCursor.rampedWpm(
+                targetWpm = settings.speedWpm,
+                elapsedMs = elapsed,
+                enabled = settings.speedGradualAcceleration,
+                startPercent = settings.speedAccelerationStartPercent,
+                durationSeconds = settings.speedAccelerationSeconds,
+            )
+            delay(
+                SpeedReaderCursor.delayMillis(
+                    wpm = effectiveWpm,
+                    chunk = chunk,
+                    chapterText = state.chapterText,
+                    pacingMode = settings.speedPacingMode,
+                    paragraphPause = settings.speedParagraphPause,
+                    microPausesEnabled = settings.speedMicroPausesEnabled,
+                    sentencePauseMs = settings.speedSentencePauseMs,
+                    clausePauseMs = settings.speedClausePauseMs,
+                    paragraphPauseMs = settings.speedParagraphPauseMs,
+                    adaptiveSentencePause = settings.speedAdaptiveSentencePause,
+                    sentenceLengthBonusMs = settings.speedSentenceLengthBonusMs,
+                    longWordSlowdownPercent = settings.speedLongWordSlowdownPercent,
+                )
+            )
+            viewModel.speedAdvance()
+        }
+    }
+
+    if (isFullscreen) {
+        // Fullscreen has distinct, measured progress / viewport / controls regions.
+        // Nothing is drawn on top of the interactive context preview.
+        Column(
+            // The system bars are hidden. Reserve only the actual top camera
+            // cutout, never the full safeDrawing/status/navigation band.
+            Modifier.fillMaxSize().background(background)
+                .padding(top = ImmersiveCameraClearance.current())
+        ) {
+            if (settings.speedShowProgress) {
+                SpeedProgress(displayState, displaySettings, focusColor, textColor)
+            }
+            SpeedViewport(
+                state = displayState,
+                settings = displaySettings,
+                textColor = textColor,
+                focusColor = focusColor,
+                guideColor = guideColor,
+                viewModel = viewModel,
+                introVisible = introVisible,
+                onRetry = viewModel::speedRetry,
+                immersiveMode = true,
+                onTogglePlayback = togglePlayback,
+                onToggleFullscreen = { isFullscreen = false },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = toggleVoice, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.RecordVoiceOver,
+                        contentDescription = if (voiceMode) "Выключить озвучку" else "Включить озвучку",
+                        tint = if (voiceMode) focusColor else textColor)
+                }
+                IconButton(onClick = togglePlayback, modifier = Modifier.size(48.dp)) {
+                    Icon(if (displayState.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (displayState.playing) "Пауза" else "Старт", tint = focusColor)
+                }
+                IconButton(onClick = { isFullscreen = false }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.FullscreenExit, contentDescription = "Свернуть полный экран", tint = focusColor)
+                }
+            }
+        }
+    } else {
+        // Wasteland/Cyberpunk device frames already consume safeDrawing.  The
+        // standard theme has no such ancestor; give its Scaffold the *same*
+        // safe viewport before measuring the shared 56 dp Speed Reader bar.
+        // Do not apply this in fullscreen: Android bars are hidden there.
+        val standaloneSafeArea = if (!workspaceEmbedded && !wastelandTheme && !cyberTheme) {
+            Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+        } else Modifier
+        Scaffold(
+            modifier = Modifier.fillMaxSize().then(standaloneSafeArea),
+            topBar = {
+                val section = state.outline?.chapters?.getOrNull(state.chapterIndex)?.title.orEmpty()
+                if (workspaceEmbedded) {
+                    Row(
+                        Modifier.fillMaxWidth().height(48.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { viewModel.speedPause(); settingsPanel = SpeedSettingsPanel.HUB }) {
+                            Icon(Icons.Default.Tune, contentDescription = "Настройки скорочтения")
+                        }
+                    }
+                } else {
+                    // Shared 56dp layout for all palettes. The parent above
+                    // handles system bars only for the standard, standalone UI.
+                    val themedChrome = settings.useWastelandDesign || settings.useCyberpunkDesign
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                            .background(background).padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                            if (themedChrome) {
+                                FluxThemedIcon(FluxIconRole.BACK, Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Назад", modifier = Modifier.size(22.dp))
+                            } else {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад",
+                                    tint = textColor, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                        Text(
+                            listOf(title, section).filter { it.isNotBlank() }
+                                .joinToString(" · ").ifBlank { "Скорочтение" },
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            color = textColor, style = MaterialTheme.typography.titleSmall,
+                        )
+                        IconButton(
+                            onClick = { viewModel.speedPause(); settingsPanel = SpeedSettingsPanel.HUB },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            if (themedChrome) {
+                                FluxThemedIcon(FluxIconRole.SPEED, Icons.Default.Tune,
+                                    contentDescription = "Настройки скорочтения", modifier = Modifier.size(22.dp))
+                            } else {
+                                Icon(Icons.Default.Tune, contentDescription = "Настройки скорочтения",
+                                    tint = textColor, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            containerColor = background,
+        ) { padding ->
+            Column(
+                Modifier.fillMaxSize().padding(padding).background(background),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (settings.speedShowProgress) SpeedProgress(displayState, displaySettings, focusColor, textColor)
+                SpeedViewport(
+                    state = displayState,
+                    settings = displaySettings,
+                    textColor = textColor,
+                    focusColor = focusColor,
+                    guideColor = guideColor,
+                    viewModel = viewModel,
+                    introVisible = introVisible,
+                    onRetry = viewModel::speedRetry,
+                    onTogglePlayback = togglePlayback,
+                    onToggleFullscreen = { isFullscreen = !isFullscreen },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+
+                if (state.error == null && state.chunk != null) {
+                    PlaybackControls(displayState, viewModel, textColor, focusColor,
+                        showFullscreen = true,
+                        onFullscreen = { isFullscreen = true },
+                        voiceEnabled = voiceMode,
+                        onTogglePlay = togglePlayback,
+                        onPrevious = previousSentence,
+                        onNext = nextSentence,
+                        onNarration = toggleVoice)
+                    if (!voiceMode) {
+                        Row(Modifier.fillMaxWidth().height(34.dp),
+                            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                            Text("${settings.speedWpm} WPM  ·  ${if (speedTuningExpanded) "Скрыть настройки" else "Настроить скорость"}",
+                                modifier = Modifier.clickable { speedTuningExpanded = !speedTuningExpanded }.padding(horizontal = 12.dp),
+                                style = MaterialTheme.typography.labelMedium, color = focusColor)
+                        }
+                        if (speedTuningExpanded) SpeedControls(settings, viewModel, textColor)
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(settingsPanel) {
+        if (settingsPanel == SpeedSettingsPanel.VOICE) speech.loadVoices()
+    }
+
+    when (settingsPanel) {
+        SpeedSettingsPanel.NONE -> Unit
+        SpeedSettingsPanel.HUB -> SpeedSettingsHub(
+            settings = settings,
+            viewModel = viewModel,
+            onOpen = { settingsPanel = it },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+        SpeedSettingsPanel.DISPLAY -> SpeedDisplaySheet(
+            settings = settings,
+            viewModel = viewModel,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+        SpeedSettingsPanel.BEHAVIOR -> SpeedBehaviorSheet(
+            settings = settings,
+            viewModel = viewModel,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+        SpeedSettingsPanel.VOICE -> SpeedVoiceSettingsSheet(
+            settings = settings,
+            voices = speechStatus.voices,
+            viewModel = viewModel,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+        SpeedSettingsPanel.EFFECTS -> ExperimentalEffectsSheet(
+            settings = settings,
+            onUpdate = viewModel::updateSettings,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+        SpeedSettingsPanel.ADVANCED -> SpeedAdvancedSheet(
+            settings = settings,
+            viewModel = viewModel,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
+    }
+
+    BackHandler(enabled = settingsPanel != SpeedSettingsPanel.NONE) {
+        settingsPanel = when (settingsPanel) {
+            SpeedSettingsPanel.HUB -> SpeedSettingsPanel.NONE
+            SpeedSettingsPanel.DISPLAY,
+            SpeedSettingsPanel.BEHAVIOR,
+            SpeedSettingsPanel.VOICE,
+            SpeedSettingsPanel.EFFECTS,
+            SpeedSettingsPanel.ADVANCED -> SpeedSettingsPanel.HUB
+            SpeedSettingsPanel.NONE -> SpeedSettingsPanel.NONE
+        }
+    }
+}
+
+@Composable
+private fun SpeedViewport(
+    state: SpeedUiState,
+    settings: ReaderSettings,
+    textColor: Color,
+    focusColor: Color,
+    guideColor: Color,
+    viewModel: AppViewModel,
+    introVisible: Boolean,
+    onRetry: () -> Unit,
+    immersiveMode: Boolean = false,
+    onTogglePlayback: () -> Unit = viewModel::speedToggle,
+    onToggleFullscreen: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val currentTogglePlayback by rememberUpdatedState(onTogglePlayback)
+    fun applyTapAction(action: SpeedTapAction) {
+        when (action) {
+            SpeedTapAction.NONE -> Unit
+            SpeedTapAction.TOGGLE_PLAYBACK -> currentTogglePlayback()
+            SpeedTapAction.TOGGLE_FULLSCREEN -> onToggleFullscreen()
+            SpeedTapAction.DISMISS_MEDIA -> viewModel.speedDismissMedia(resume = true)
+        }
+    }
+    BoxWithConstraints(
+        modifier
+            .padding(horizontal = 20.dp)
+            .pointerInput(state.activeMedia != null, settings.speedTapToToggle, immersiveMode) {
+                detectTapGestures(
+                    onTap = {
+                        applyTapAction(
+                            SpeedTapPolicy.singleTap(
+                                activeMedia = state.activeMedia != null,
+                                tapToToggle = settings.speedTapToToggle,
+                                contentInteractive = state.chunk != null && !state.loading && state.error == null && !introVisible,
+                            )
+                        )
+                    },
+                    onDoubleTap = {
+                        applyTapAction(
+                            SpeedTapPolicy.doubleTap(
+                                activeMedia = state.activeMedia != null,
+                                contentInteractive = state.chunk != null && !state.loading && state.error == null && !introVisible,
+                            )
+                        )
+                    },
+                )
+            }
+    ) {
+        val density = LocalDensity.current
+        val mainTextHeightPx = with(density) {
+            (settings.speedFontSizeSp * settings.speedLineHeightMultiplier * settings.speedMaxLines.coerceAtLeast(1)).sp.toPx()
+        }
+        val mainHalfHeightPx = mainTextHeightPx / 2f
+        val segmentFontSp = (settings.speedFontSizeSp * 0.28f).coerceIn(13f, 20f)
+        val persistentHeightPx = if (settings.speedLowerSegmentMode == SpeedLowerSegmentMode.OFF) 0f else with(density) {
+            (segmentFontSp * 1.30f * 2f).sp.toPx() + 10.dp.toPx()
+        }
+        // Reserve pause context even while playback is running so pressing Pause never moves the
+        // fixation point. The active word remains spatially stable in every UI state.
+        val pauseContextHeightPx = if (
+            settings.speedPauseContextEnabled && settings.speedLowerSegmentMode != SpeedLowerSegmentMode.CONTEXT
+        ) with(density) { 42.sp.toPx() + 12.dp.toPx() } else 0f
+        // Reserve the pause preview even while playback is running. This keeps the ORP perfectly
+        // stationary when a tap pauses reading and prevents the full-text card from covering it.
+        val pausePreviewReservePx = if (settings.speedShowPausePreview) with(density) {
+            (if (immersiveMode) 110.dp else 140.dp).toPx()
+        } else 0f
+        val topClearancePx = with(density) { 24.dp.toPx() }
+        val lowerSegmentReservePx = persistentHeightPx + pauseContextHeightPx + with(density) {
+            (if (persistentHeightPx > 0f || pauseContextHeightPx > 0f) 22.dp else 0.dp).toPx()
+        }
+        val lowerContentReservePx = maxOf(lowerSegmentReservePx, pausePreviewReservePx)
+        val viewportHeightPx = with(density) { maxHeight.toPx().coerceAtLeast(1f) }
+        val effectiveVerticalPosition = SpeedViewportGeometry.clampFixationFraction(
+            requestedFraction = settings.speedVerticalPosition,
+            viewportHeightPx = viewportHeightPx,
+            mainHalfHeightPx = mainHalfHeightPx,
+            edgeClearancePx = topClearancePx,
+            lowerContentReservePx = lowerContentReservePx,
+        )
+        val yOffset = maxHeight * (effectiveVerticalPosition - 0.5f)
+        val mainHalfHeightDp = with(density) { mainHalfHeightPx.toDp() }
+        val persistentHeightDp = with(density) { persistentHeightPx.toDp() }
+        val pauseContextHeightDp = with(density) { pauseContextHeightPx.toDp() }
+        val persistentOffset = mainHalfHeightDp + 22.dp + persistentHeightDp * 0.5f
+        val pauseContextOffset = when (settings.speedLowerSegmentMode) {
+            SpeedLowerSegmentMode.OFF -> mainHalfHeightDp + 22.dp + pauseContextHeightDp * 0.5f
+            SpeedLowerSegmentMode.CURRENT -> persistentOffset + persistentHeightDp * 0.5f + 12.dp + pauseContextHeightDp * 0.5f
+            SpeedLowerSegmentMode.CONTEXT -> persistentOffset
+        }
+
+        if (settings.speedShowGuide && state.chunk != null && state.error == null && state.activeMedia == null && !introVisible) {
+            SpeedFocusGuide(
+                settings = settings,
+                guideColor = guideColor,
+                focusPosition = effectiveVerticalPosition,
+                horizontalFocusPosition = settings.speedHorizontalFocusFraction,
+                mainHalfHeightPx = mainHalfHeightPx,
+                lowerContentReservePx = lowerContentReservePx,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (settings.speedFocusBandEnabled && state.chunk != null && state.error == null && state.activeMedia == null && !introVisible) {
+            val bandHeight = with(density) { mainTextHeightPx.toDp() } + 34.dp
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .offset(y = yOffset)
+                    .fillMaxWidth(settings.speedTextWidthFraction)
+                    .height(bandHeight)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(focusColor.copy(alpha = settings.speedFocusBandAlpha)),
+            )
+        }
+        when {
+            state.activeMedia != null -> SpeedMediaFrame(
+                bookId = state.bookId.orEmpty(),
+                cue = state.activeMedia,
+                viewModel = viewModel,
+                textColor = textColor,
+                focusColor = focusColor,
+                displayMs = settings.speedImagePauseMs,
+                modifier = Modifier.fillMaxSize(),
+            )
+            introVisible -> SpeedChapterIntro(
+                chapterIndex = state.chapterIndex,
+                title = state.headingCues
+                    .distinctBy { it.text.trim().lowercase() }
+                    .take(2)
+                    .joinToString("\n") { it.text.trim() }
+                    .ifBlank { state.outline?.chapters?.getOrNull(state.chapterIndex)?.title.orEmpty() },
+                textColor = textColor,
+                focusColor = focusColor,
+                modifier = Modifier.fillMaxSize(),
+            )
+            state.loading -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = focusColor)
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    state.status ?: "Готовлю текст…",
+                    color = textColor.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            state.error != null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(state.error, color = focusColor, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(18.dp))
+                Button(onClick = onRetry) { Text("Повторить") }
+            }
+            state.chunk != null -> {
+                val chunk = state.chunk
+                SpeedChunkText(
+                    state = state,
+                    settings = settings,
+                    textColor = textColor,
+                    focusColor = focusColor,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(y = yOffset)
+                        .then(
+                            if (settings.speedMode == SpeedMode.RSVP) Modifier.fillMaxWidth()
+                            else Modifier.fillMaxWidth(settings.speedTextWidthFraction)
+                        ),
+                )
+                if (settings.speedLowerSegmentMode != SpeedLowerSegmentMode.OFF) {
+                    PersistentSpeedSegment(
+                        chapterText = state.chapterText,
+                        chunk = chunk,
+                        mode = settings.speedLowerSegmentMode,
+                        textColor = textColor,
+                        focusColor = focusColor,
+                        fontSizeSp = settings.speedFontSizeSp,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = yOffset + persistentOffset)
+                            .fillMaxWidth(settings.speedTextWidthFraction),
+                    )
+                }
+                if (!state.playing && settings.speedShowPausePreview) {
+                    SpeedPausePreview(
+                        chapterText = state.chapterText,
+                        chunk = chunk,
+                        textColor = textColor,
+                        focusColor = focusColor,
+                        onWordTap = viewModel::speedSeekToOffset,
+                        compact = immersiveMode,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(if (immersiveMode) 0.90f else 0.94f)
+                            .padding(bottom = if (immersiveMode) 6.dp else 12.dp),
+                    )
+                }
+                if (!state.playing &&
+                    !settings.speedShowPausePreview &&
+                    settings.speedPauseContextEnabled &&
+                    settings.speedLowerSegmentMode != SpeedLowerSegmentMode.CONTEXT
+                ) {
+                    val context = remember(state.chapterText, chunk.startOffset, chunk.endOffset) {
+                        SpeedReaderCursor.pauseContext(state.chapterText, chunk.startOffset, chunk.endOffset)
+                    }
+                    val contextText = listOfNotNull(
+                        context.before.takeIf { it.isNotBlank() }?.let { "…$it" },
+                        context.after.takeIf { it.isNotBlank() }?.let { "$it…" },
+                    ).joinToString("   •   ")
+                    if (contextText.isNotBlank()) {
+                        Text(
+                            text = contextText,
+                            color = textColor.copy(alpha = 0.32f),
+                            fontSize = (settings.speedFontSizeSp * 0.22f).coerceIn(12f, 17f).sp,
+                            lineHeight = 21.sp,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .offset(y = yOffset + pauseContextOffset)
+                                .fillMaxWidth(settings.speedTextWidthFraction * 0.90f),
+                        )
+                    }
+                }
+            }
+            else -> Text("Нет текста", color = textColor, modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+@Composable
+private fun SpeedMediaFrame(
+    bookId: String,
+    cue: SpeedMediaCue,
+    viewModel: AppViewModel,
+    textColor: Color,
+    focusColor: Color,
+    displayMs: Int,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val density = LocalDensity.current
+        val viewportMaxHeight = maxHeight
+        val targetWidthPx = with(density) { (maxWidth * 0.90f).roundToPx() }.coerceAtLeast(480)
+        val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, key1 = bookId, key2 = cue.ref, key3 = targetWidthPx) {
+            value = viewModel.loadImage(bookId, cue.ref, targetWidthPx)
+        }
+        Column(
+            Modifier.fillMaxWidth(0.92f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = cue.alt.ifBlank { null },
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((viewportMaxHeight * 0.62f).coerceAtLeast(160.dp))
+                        .clip(RoundedCornerShape(18.dp)),
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height((viewportMaxHeight * 0.42f).coerceAtLeast(140.dp)),
+                    shape = RoundedCornerShape(18.dp),
+                    color = textColor.copy(alpha = 0.05f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) { CircularProgressIndicator(color = focusColor) }
+                }
+            }
+            if (cue.alt.isNotBlank()) {
+                Text(cue.alt, color = textColor.copy(alpha = 0.78f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+            }
+            Text(
+                "Изображение · ${String.format("%.1f", displayMs / 1000f)} с · тап, чтобы продолжить",
+                color = textColor.copy(alpha = 0.46f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeedChapterIntro(
+    chapterIndex: Int,
+    title: String,
+    textColor: Color,
+    focusColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val chapterLabel = "Глава ${chapterIndex + 1}"
+    val normalizedTitle = title.trim()
+    val displayTitle = normalizedTitle
+        .replace(Regex("(?iu)^глава\\s+\\d+[\\s:—–.-]*"), "")
+        .trim()
+        .ifBlank { normalizedTitle.takeUnless { it.equals(chapterLabel, ignoreCase = true) }.orEmpty() }
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            chapterLabel,
+            color = focusColor.copy(alpha = 0.88f),
+            style = MaterialTheme.typography.titleMedium,
+            letterSpacing = 0.8.sp,
+        )
+        if (displayTitle.isNotBlank()) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                displayTitle,
+                color = textColor,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(0.86f),
+            )
+        }
+        Spacer(Modifier.height(22.dp))
+        Box(Modifier.width(54.dp).height(2.dp).background(focusColor.copy(alpha = 0.72f)))
+    }
+}
+
+@Composable
+private fun SpeedPausePreview(
+    chapterText: String,
+    chunk: io.fluxreader.app.reader.SpeedChunk,
+    textColor: Color,
+    focusColor: Color,
+    onWordTap: (Int) -> Unit,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val window = remember(chapterText, chunk.startOffset) {
+        SpeedReaderCursor.textWindow(chapterText, chunk.startOffset, maxChars = 700)
+    }
+    if (window.text.isBlank()) return
+    val localStart = (chunk.startOffset - window.startOffset).coerceIn(0, window.text.length)
+    val localEnd = (chunk.endOffset - window.startOffset).coerceIn(localStart, window.text.length)
+    val annotated = remember(window.text, localStart, localEnd, focusColor) {
+        buildAnnotatedString {
+            append(window.text)
+            if (localStart < localEnd) {
+                addStyle(
+                    SpanStyle(color = focusColor, fontWeight = FontWeight.SemiBold),
+                    start = localStart,
+                    end = localEnd,
+                )
+            }
+        }
+    }
+    Surface(
+        modifier = modifier,
+        color = textColor.copy(alpha = 0.085f),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.14f)),
+        shadowElevation = 6.dp,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)) {
+            Text(
+                "Контекст · тапните слово, чтобы перейти к нему",
+                color = textColor.copy(alpha = 0.64f),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            val layoutHolder = remember(annotated) { arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1) }
+            BasicText(
+                text = annotated,
+                modifier = Modifier.pointerInput(annotated, window.startOffset) {
+                    detectTapGestures { position ->
+                        val layout = layoutHolder[0] ?: return@detectTapGestures
+                        val localOffset = layout.getOffsetForPosition(position).coerceIn(0, window.text.length)
+                        val word = SpeedReaderCursor.wordStartOffset(window.text, localOffset)
+                        onWordTap(window.startOffset + word)
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = textColor.copy(alpha = 0.84f),
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Start,
+                ),
+                maxLines = if (compact) 3 else 4,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { layoutHolder[0] = it },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeedFocusGuide(
+    settings: ReaderSettings,
+    guideColor: Color,
+    focusPosition: Float,
+    horizontalFocusPosition: Float,
+    mainHalfHeightPx: Float,
+    lowerContentReservePx: Float,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier) {
+        val centerX = SpeedViewportGeometry.horizontalFocusPx(size.width, horizontalFocusPosition)
+        val centerY = size.height * focusPosition
+        val halfHeight = min(size.height * settings.speedGuideHeightFraction / 2f, 90.dp.toPx())
+        val clearance = 20.dp.toPx()
+        val stroke = settings.speedGuideWidthDp.dp.toPx()
+        val top = (centerY - halfHeight).coerceAtLeast(0f)
+        val bottom = (centerY + halfHeight).coerceAtMost(size.height)
+        // Rails never enter the fixation block or the persistent lower/context area. Their center
+        // follows the clamped fixation position, so large fonts and accessibility font scaling do
+        // not let guide lines collide with readable text.
+        val gapTop = (centerY - mainHalfHeightPx - clearance).coerceAtLeast(top)
+        val gapBottom = (centerY + mainHalfHeightPx + clearance + lowerContentReservePx).coerceAtMost(bottom)
+        if (gapTop > top) {
+            drawLine(guideColor, Offset(centerX, top), Offset(centerX, gapTop), strokeWidth = stroke)
+        }
+        if (bottom > gapBottom) {
+            drawLine(guideColor, Offset(centerX, gapBottom), Offset(centerX, bottom), strokeWidth = stroke)
+        }
+        if (settings.speedShowFocusTicks) {
+            val tick = 8.dp.toPx()
+            if (gapTop > top) {
+                drawLine(guideColor, Offset(centerX - tick, gapTop), Offset(centerX + tick, gapTop), strokeWidth = stroke)
+            }
+            if (bottom > gapBottom) {
+                drawLine(guideColor, Offset(centerX - tick, gapBottom), Offset(centerX + tick, gapBottom), strokeWidth = stroke)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersistentSpeedSegment(
+    chapterText: String,
+    chunk: io.fluxreader.app.reader.SpeedChunk,
+    mode: SpeedLowerSegmentMode,
+    textColor: Color,
+    focusColor: Color,
+    fontSizeSp: Float,
+    modifier: Modifier = Modifier,
+) {
+    val segmentSize = (fontSizeSp * 0.28f).coerceIn(13f, 20f).sp
+    when (mode) {
+        SpeedLowerSegmentMode.OFF -> Unit
+        SpeedLowerSegmentMode.CURRENT -> {
+            Text(
+                text = chunk.tokens.joinToString(" "),
+                color = textColor.copy(alpha = 0.72f),
+                fontSize = segmentSize,
+                lineHeight = (segmentSize.value * 1.25f).sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = modifier.fillMaxWidth(0.88f),
+            )
+        }
+        SpeedLowerSegmentMode.CONTEXT -> {
+            val context = remember(chapterText, chunk.startOffset, chunk.endOffset) {
+                SpeedReaderCursor.pauseContext(chapterText, chunk.startOffset, chunk.endOffset, wordsEachSide = 4)
+            }
+            val annotated = buildAnnotatedString {
+                if (context.before.isNotBlank()) {
+                    withStyle(SpanStyle(color = textColor.copy(alpha = 0.30f))) { append("…${context.before}  ") }
+                }
+                withStyle(SpanStyle(color = focusColor.copy(alpha = 0.92f), fontWeight = FontWeight.SemiBold)) {
+                    append(chunk.tokens.joinToString(" "))
+                }
+                if (context.after.isNotBlank()) {
+                    withStyle(SpanStyle(color = textColor.copy(alpha = 0.30f))) { append("  ${context.after}…") }
+                }
+            }
+            Text(
+                text = annotated,
+                fontSize = segmentSize,
+                lineHeight = (segmentSize.value * 1.30f).sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = modifier.fillMaxWidth(0.94f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackControls(
+    state: SpeedUiState,
+    viewModel: AppViewModel,
+    textColor: Color,
+    focusColor: Color,
+    onFullscreen: () -> Unit,
+    onNarration: () -> Unit,
+    voiceEnabled: Boolean,
+    onTogglePlay: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    showFullscreen: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (LocalFluxThemeMode.current.isExperimentalChrome) {
+        ExperimentalPanel(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            contentPadding = 5.dp,
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                ExperimentalPanel(accent = true, contentPadding = 0.dp) {
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "Предыдущее предложение", tint = LocalFluxThemeMode.current.chromeText)
+                    }
+                }
+                ExperimentalPanel(accent = true, contentPadding = 0.dp) {
+                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(56.dp)) {
+                        Icon(
+                            if (state.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (state.playing) "Пауза" else "Старт",
+                            tint = LocalFluxThemeMode.current.chromeAccent,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                }
+                ExperimentalPanel(accent = true, contentPadding = 0.dp) {
+                    IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "Следующее предложение", tint = LocalFluxThemeMode.current.chromeText)
+                    }
+                }
+                ExperimentalPanel(contentPadding = 0.dp) {
+                    IconButton(onClick = onNarration, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.RecordVoiceOver,
+                            contentDescription = if (voiceEnabled) "Выключить озвучку" else "Включить озвучку",
+                            tint = if (voiceEnabled) LocalFluxThemeMode.current.chromeAccent else LocalFluxThemeMode.current.chromeText)
+                    }
+                }
+                if (showFullscreen) ExperimentalPanel(contentPadding = 0.dp) {
+                    IconButton(onClick = onFullscreen, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Fullscreen, contentDescription = "Полноэкранное скорочтение", tint = LocalFluxThemeMode.current.chromeAccent)
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    Surface(
+        modifier = modifier,
+        color = textColor.copy(alpha = 0.115f),
+        shape = RoundedCornerShape(30.dp),
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.17f)),
+        shadowElevation = 10.dp,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            IconButton(
+                onClick = onPrevious,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    Icons.Default.SkipPrevious,
+                    contentDescription = "Предыдущее предложение",
+                    tint = textColor.copy(alpha = 0.88f),
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = focusColor.copy(alpha = 0.24f),
+                border = BorderStroke(1.dp, focusColor.copy(alpha = 0.42f)),
+                shadowElevation = 4.dp,
+            ) {
+                IconButton(
+                    onClick = onTogglePlay,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(
+                        if (state.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (state.playing) "Пауза" else "Старт",
+                        tint = focusColor,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+            }
+            IconButton(
+                onClick = onNext,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    Icons.Default.SkipNext,
+                    contentDescription = "Следующее предложение",
+                    tint = textColor.copy(alpha = 0.88f),
+                )
+            }
+            IconButton(onClick = onNarration, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.RecordVoiceOver,
+                    contentDescription = if (voiceEnabled) "Выключить озвучку" else "Включить озвучку",
+                    tint = if (voiceEnabled) focusColor else textColor.copy(alpha = 0.65f))
+            }
+            if (showFullscreen) Surface(
+                shape = CircleShape,
+                color = Color.Transparent,
+                border = BorderStroke(1.dp, focusColor.copy(alpha = 0.58f)),
+            ) {
+                IconButton(
+                    onClick = onFullscreen,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Fullscreen,
+                        contentDescription = "Полноэкранное скорочтение",
+                        tint = focusColor,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeedProgress(
+    state: SpeedUiState,
+    settings: ReaderSettings,
+    focusColor: Color,
+    textColor: Color,
+) {
+    val chapterCount = state.outline?.chapters?.size ?: 0
+    val chapterProgress = if (state.chapterText.isBlank()) 0f else {
+        ((state.chunk?.startOffset ?: 0).toFloat() / state.chapterText.length.toFloat()).coerceIn(0f, 1f)
+    }
+    val bookProgress = if (chapterCount <= 0) 0f else {
+        ((state.chapterIndex + chapterProgress) / chapterCount.toFloat()).coerceIn(0f, 1f)
+    }
+    val chapterWordCount = remember(state.chapterText) {
+        Regex("\\S+").findAll(state.chapterText).count().coerceAtLeast(1)
+    }
+    val remainingWords = (chapterWordCount * (1f - chapterProgress)).coerceAtLeast(0f)
+    val remainingSeconds = ((remainingWords / settings.speedWpm.coerceAtLeast(1)) * 60f).roundToInt().coerceAtLeast(0)
+    val eta = when {
+        remainingSeconds >= 3600 -> "%d:%02d:%02d".format(remainingSeconds / 3600, (remainingSeconds % 3600) / 60, remainingSeconds % 60)
+        else -> "%d:%02d".format(remainingSeconds / 60, remainingSeconds % 60)
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        if (settings.speedProgressMode == SpeedProgressMode.CHAPTER || settings.speedProgressMode == SpeedProgressMode.BOTH) {
+            LinearProgressIndicator(
+                progress = { chapterProgress },
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+                color = focusColor,
+                trackColor = textColor.copy(alpha = 0.14f),
+            )
+        }
+        if (settings.speedProgressMode == SpeedProgressMode.BOOK || settings.speedProgressMode == SpeedProgressMode.BOTH) {
+            LinearProgressIndicator(
+                progress = { bookProgress },
+                modifier = Modifier.fillMaxWidth().height(if (settings.speedProgressMode == SpeedProgressMode.BOTH) 2.dp else 4.dp),
+                color = focusColor.copy(alpha = if (settings.speedProgressMode == SpeedProgressMode.BOTH) 0.48f else 1f),
+                trackColor = textColor.copy(alpha = 0.12f),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            val progressLabel = when (settings.speedProgressMode) {
+                SpeedProgressMode.CHAPTER -> "Глава ${(chapterProgress * 100).toInt()}%"
+                SpeedProgressMode.BOOK -> "Книга ${(bookProgress * 100).toInt()}%"
+                SpeedProgressMode.BOTH -> "Глава ${(chapterProgress * 100).toInt()}% · Книга ${(bookProgress * 100).toInt()}%"
+            }
+            Text(progressLabel, color = textColor.copy(alpha = 0.64f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            Text("≈ $eta", color = textColor.copy(alpha = 0.60f), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun SpeedChunkText(
+    state: SpeedUiState,
+    settings: ReaderSettings,
+    textColor: Color,
+    focusColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val chunk = state.chunk ?: return
+    val family = resolveReaderFontFamily(settings.speedFontMode, settings.customFontPath)
+    val weight = speedFontWeight(settings.speedFontWeight)
+    if (settings.speedMode == SpeedMode.RSVP && chunk.tokens.size == 1) {
+        RsvpWord(
+            token = chunk.tokens.first(),
+            chapterText = state.chapterText,
+            chunkEndOffset = chunk.endOffset,
+            settings = settings,
+            textColor = textColor,
+            focusColor = focusColor,
+            family = family,
+            weight = weight,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val annotated = buildSpeedAnnotatedText(chunk.tokens, chunk.focusTokenIndex, settings, textColor, focusColor)
+    FittedSpeedText(
+        text = annotated,
+        settings = settings,
+        textColor = textColor,
+        family = family,
+        weight = weight,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun RsvpWord(
+    token: String,
+    chapterText: String,
+    chunkEndOffset: Int,
+    settings: ReaderSettings,
+    textColor: Color,
+    focusColor: Color,
+    family: FontFamily,
+    weight: FontWeight,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier.clipToBounds(), contentAlignment = Alignment.CenterStart) {
+        val focus = SpeedReaderCursor.focusCharacterIndex(token)
+        val density = LocalDensity.current
+        val measurer = rememberTextMeasurer()
+        val maxWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        val baseSize = settings.speedFontSizeSp
+        val letterSpacing = settings.speedLetterSpacingSp.sp
+
+        fun focusedWord(): AnnotatedString = buildAnnotatedString {
+            if (settings.speedFocusStyle == SpeedFocusStyle.WORD) {
+                withStyle(SpanStyle(color = focusColor, fontWeight = FontWeight.Black)) { append(token) }
+            } else {
+                append(token.substring(0, focus))
+                token.getOrNull(focus)?.let { character ->
+                    withStyle(SpanStyle(color = focusColor, fontWeight = FontWeight.Black)) { append(character) }
+                }
+                if (focus + 1 < token.length) append(token.substring(focus + 1))
+            }
+        }
+
+        val baseText = focusedWord()
+        val baseStyle = TextStyle(
+            color = textColor,
+            fontFamily = family,
+            fontWeight = weight,
+            fontSize = baseSize.sp,
+            letterSpacing = letterSpacing,
+        )
+        val baseLayout = measurer.measure(baseText, style = baseStyle, maxLines = 1, softWrap = false)
+        val baseFocusBox = if (token.isNotEmpty()) baseLayout.getBoundingBox(focus.coerceIn(0, token.lastIndex)) else null
+        val baseFocusCenter = baseFocusBox?.center?.x ?: (baseLayout.size.width / 2f)
+        val leftExtent = baseFocusCenter.coerceAtLeast(1f)
+        val rightExtent = (baseLayout.size.width - baseFocusCenter).coerceAtLeast(1f)
+        val focusTargetPx = SpeedViewportGeometry.horizontalFocusPx(maxWidthPx, settings.speedHorizontalFocusFraction)
+        val leftRoom = focusTargetPx * 0.975f
+        val rightRoom = (maxWidthPx - focusTargetPx) * 0.975f
+        val scale = min(1f, min(leftRoom / leftExtent, rightRoom / rightExtent))
+        val requestedSize = baseSize * scale
+        val minSize = settings.speedMinFontSizeSp
+        val finalSizeSp = when {
+            settings.speedFixedFontSize -> baseSize
+            !settings.speedAutoFitText -> baseSize
+            requestedSize >= minSize -> requestedSize
+            leftExtent * (minSize / baseSize) <= leftRoom && rightExtent * (minSize / baseSize) <= rightRoom -> minSize
+            else -> requestedSize.coerceAtLeast(14f)
+        }
+        val finalText = focusedWord()
+        val finalStyle = baseStyle.copy(fontSize = finalSizeSp.sp)
+        val finalLayout = measurer.measure(finalText, style = finalStyle, maxLines = 1, softWrap = false)
+        val finalFocusBox = if (token.isNotEmpty()) finalLayout.getBoundingBox(focus.coerceIn(0, token.lastIndex)) else null
+        val focusCenterPx = finalFocusBox?.center?.x ?: (finalLayout.size.width / 2f)
+        // The ORP glyph is pinned to a stable left-biased fixation rail. The rail defaults
+        // to 30% of the viewport, leaving most of the line free for gray upcoming words.
+        val currentLeftPx = focusTargetPx - focusCenterPx
+        val currentLeftDp = with(density) { currentLeftPx.toDp() }
+
+        Text(
+            text = finalText,
+            color = textColor,
+            fontSize = finalSizeSp.sp,
+            fontFamily = family,
+            fontWeight = weight,
+            letterSpacing = letterSpacing,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.align(Alignment.CenterStart).offset(x = currentLeftDp),
+        )
+
+        if (settings.speedReedyFlowEnabled && settings.speedPeripheralWords > 0) {
+            val following = remember(chapterText, chunkEndOffset, settings.speedPeripheralWords) {
+                SpeedReaderCursor.followingTokens(chapterText, chunkEndOffset, settings.speedPeripheralWords)
+            }
+            if (following.isNotEmpty()) {
+                val gapPx = with(density) { 14.dp.toPx() }
+                val nextLeftPx = currentLeftPx + finalLayout.size.width + gapPx
+                val nextWord = following.first()
+                val previewStyle = finalStyle.copy(color = textColor.copy(alpha = settings.speedContextOpacity))
+                val previewWidthPx = measurer.measure(nextWord, style = previewStyle,
+                    maxLines = 1, softWrap = false).size.width
+                if (nextLeftPx >= 0f && nextLeftPx + previewWidthPx + gapPx < maxWidthPx) {
+                    Text(
+                        text = nextWord,
+                        color = textColor.copy(alpha = settings.speedContextOpacity * 0.72f),
+                        fontSize = finalSizeSp.sp,
+                        fontFamily = family, fontWeight = weight, letterSpacing = letterSpacing,
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                        modifier = Modifier.align(Alignment.CenterStart)
+                            .offset(x = with(density) { nextLeftPx.toDp() }),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun buildSpeedAnnotatedText(
+    tokens: List<String>,
+    focusTokenIndex: Int,
+    settings: ReaderSettings,
+    textColor: Color,
+    focusColor: Color,
+): AnnotatedString = buildAnnotatedString {
+    tokens.forEachIndexed { index, token ->
+        if (index > 0) append(" ")
+        val contextAlpha = if (settings.speedMode == SpeedMode.PHRASE) 1f else settings.speedContextOpacity
+        if (index != focusTokenIndex) {
+            withStyle(SpanStyle(color = textColor.copy(alpha = contextAlpha))) { append(token) }
+            return@forEachIndexed
+        }
+        if (settings.speedFocusStyle == SpeedFocusStyle.WORD) {
+            withStyle(SpanStyle(color = focusColor, fontWeight = FontWeight.Black)) { append(token) }
+            return@forEachIndexed
+        }
+        val focus = SpeedReaderCursor.focusCharacterIndex(token)
+        append(token.substring(0, focus))
+        if (token.isNotEmpty()) {
+            withStyle(SpanStyle(color = focusColor, fontWeight = FontWeight.Black)) { append(token[focus]) }
+            if (focus + 1 < token.length) append(token.substring(focus + 1))
+        }
+    }
+}
+
+@Composable
+private fun FittedSpeedText(
+    text: AnnotatedString,
+    settings: ReaderSettings,
+    textColor: Color,
+    family: FontFamily,
+    weight: FontWeight,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        val density = LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val textMeasurer = rememberTextMeasurer()
+        val maxLines = settings.speedMaxLines
+        val targetSize = when (settings.speedMode) {
+            SpeedMode.RSVP -> settings.speedFontSizeSp
+            SpeedMode.PHRASE -> settings.speedFontSizeSp * 0.90f
+            SpeedMode.FOCUS -> settings.speedFontSizeSp * 0.86f
+        }
+        val minSize = settings.speedMinFontSizeSp.coerceAtMost(targetSize)
+        val letterSpacing = settings.speedLetterSpacingSp.sp
+        val fittedSize = remember(
+            text,
+            maxWidthPx,
+            maxLines,
+            targetSize,
+            minSize,
+            settings.speedAutoFitText,
+            settings.speedLineHeightMultiplier,
+            settings.speedLetterSpacingSp,
+            settings.speedFontWeight,
+            family,
+        ) {
+            if (settings.speedFixedFontSize || !settings.speedAutoFitText) {
+                targetSize
+            } else {
+                var low = minSize
+                var high = targetSize
+                var best = minSize
+                repeat(7) {
+                    val mid = (low + high) / 2f
+                    val result = textMeasurer.measure(
+                        text = text,
+                        style = TextStyle(
+                            fontFamily = family,
+                            fontWeight = weight,
+                            fontSize = mid.sp,
+                            lineHeight = (mid * settings.speedLineHeightMultiplier).sp,
+                            letterSpacing = letterSpacing,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = maxLines,
+                        softWrap = maxLines > 1,
+                        overflow = TextOverflow.Clip,
+                        constraints = Constraints(maxWidth = maxWidthPx),
+                    )
+                    if (result.hasVisualOverflow) {
+                        high = mid
+                    } else {
+                        best = mid
+                        low = mid
+                    }
+                }
+                if (best == minSize) {
+                    val atMin = textMeasurer.measure(
+                        text = text,
+                        style = TextStyle(
+                            fontFamily = family,
+                            fontWeight = weight,
+                            fontSize = minSize.sp,
+                            lineHeight = (minSize * settings.speedLineHeightMultiplier).sp,
+                            letterSpacing = letterSpacing,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = maxLines,
+                        softWrap = maxLines > 1,
+                        overflow = TextOverflow.Clip,
+                        constraints = Constraints(maxWidth = maxWidthPx),
+                    )
+                    if (atMin.hasVisualOverflow && maxLines == 1) {
+                        val unbounded = textMeasurer.measure(
+                            text = text,
+                            style = TextStyle(fontFamily = family, fontWeight = weight, fontSize = minSize.sp, letterSpacing = letterSpacing),
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                        (minSize * maxWidthPx.toFloat() / unbounded.size.width.coerceAtLeast(1).toFloat() * 0.98f).coerceAtLeast(14f)
+                    } else {
+                        minSize
+                    }
+                } else {
+                    best
+                }
+            }
+        }
+        Text(
+            text = text,
+            color = textColor,
+            fontSize = fittedSize.sp,
+            lineHeight = (fittedSize * settings.speedLineHeightMultiplier).sp,
+            textAlign = TextAlign.Center,
+            fontFamily = family,
+            fontWeight = weight,
+            letterSpacing = letterSpacing,
+            maxLines = maxLines,
+            softWrap = maxLines > 1,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+private fun speedFontWeight(value: Int): FontWeight = when (value.coerceIn(300, 900)) {
+    in 0..349 -> FontWeight.W300
+    in 350..449 -> FontWeight.W400
+    in 450..549 -> FontWeight.W500
+    in 550..649 -> FontWeight.W600
+    in 650..749 -> FontWeight.W700
+    in 750..849 -> FontWeight.W800
+    else -> FontWeight.W900
+}
+
+@Composable
+private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, textColor: Color) {
+    var wpmDraft by remember(settings.speedWpm) { mutableFloatStateOf(settings.speedWpm.toFloat()) }
+    if (LocalFluxThemeMode.current.isExperimentalChrome) {
+        ExperimentalPanel(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+            contentPadding = 10.dp,
+        ) {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("SPEED", color = LocalFluxThemeMode.current.chromeText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text("${wpmDraft.toInt()} WPM", color = LocalFluxThemeMode.current.chromeAccent, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = wpmDraft,
+                    onValueChange = { wpmDraft = it },
+                    onValueChangeFinished = { viewModel.updateSettings { it.copy(speedWpm = wpmDraft.toInt()) } },
+                    valueRange = 100f..3000f,
+                    steps = 28,
+                )
+                Text("PACING PROFILE", color = LocalFluxThemeMode.current.chromeText.copy(alpha = 0.84f), style = MaterialTheme.typography.labelMedium)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SpeedPacingMode.entries.forEach { pacing ->
+                        ExperimentalTab(
+                            label = pacingLabel(pacing),
+                            selected = settings.speedPacingMode == pacing,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            viewModel.updateSettings { current ->
+                                when (pacing) {
+                                    SpeedPacingMode.CONSTANT -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = false,
+                                        speedGradualAcceleration = false,
+                                        speedLongWordSlowdownPercent = 0,
+                                    )
+                                    SpeedPacingMode.SMART -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = true,
+                                        speedSentencePauseMs = 170,
+                                        speedClausePauseMs = 65,
+                                        speedParagraphPauseMs = 260,
+                                        speedLongWordSlowdownPercent = 18,
+                                        speedGradualAcceleration = true,
+                                    )
+                                    SpeedPacingMode.DEEP -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = true,
+                                        speedSentencePauseMs = 230,
+                                        speedClausePauseMs = 95,
+                                        speedParagraphPauseMs = 380,
+                                        speedLongWordSlowdownPercent = 28,
+                                        speedGradualAcceleration = true,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        color = textColor.copy(alpha = 0.045f),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Скорость", color = textColor.copy(alpha = 0.72f), style = MaterialTheme.typography.labelLarge)
+                Text("${wpmDraft.toInt()} WPM", color = textColor, style = MaterialTheme.typography.titleMedium)
+            }
+            Slider(
+                value = wpmDraft,
+                onValueChange = { wpmDraft = it },
+                onValueChangeFinished = { viewModel.updateSettings { it.copy(speedWpm = wpmDraft.toInt()) } },
+                valueRange = 100f..3000f,
+                steps = 28,
+            )
+            Text("Профиль чтения", color = textColor.copy(alpha = 0.66f), style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                SpeedPacingMode.entries.forEach { pacing ->
+                    FilterChip(
+                        selected = settings.speedPacingMode == pacing,
+                        onClick = {
+                            viewModel.updateSettings { current ->
+                                when (pacing) {
+                                    SpeedPacingMode.CONSTANT -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = false,
+                                        speedGradualAcceleration = false,
+                                        speedLongWordSlowdownPercent = 0,
+                                    )
+                                    SpeedPacingMode.SMART -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = true,
+                                        speedSentencePauseMs = 170,
+                                        speedClausePauseMs = 65,
+                                        speedParagraphPauseMs = 260,
+                                        speedLongWordSlowdownPercent = 18,
+                                        speedGradualAcceleration = true,
+                                    )
+                                    SpeedPacingMode.DEEP -> current.copy(
+                                        speedPacingMode = pacing,
+                                        speedMicroPausesEnabled = true,
+                                        speedSentencePauseMs = 230,
+                                        speedClausePauseMs = 95,
+                                        speedParagraphPauseMs = 380,
+                                        speedLongWordSlowdownPercent = 28,
+                                        speedGradualAcceleration = true,
+                                    )
+                                }
+                            }
+                        },
+                        label = { Text(pacingLabel(pacing)) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedSettingsHub(
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    onOpen: (SpeedSettingsPanel) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ModalSheetHeader(
+                title = "Настройки скорочтения",
+                subtitle = "Основной экран оставляет только скорость и профили; остальные параметры разнесены по разделам.",
+                onClose = onDismiss,
+            )
+            Text("Основное", style = MaterialTheme.typography.titleMedium)
+            SettingsValueSlider("Размер текста", settings.speedFontSizeSp, 24f..104f, { "${it.toInt()} sp" }) { value ->
+                viewModel.updateSettings { it.copy(speedFontSizeSp = value) }
+            }
+            Text(
+                "Кегль меняется сразу, при этом одинаковый размер всех RSVP-слов остаётся включённым. Точная геометрия и автоподгонка находятся в «Расширенные».",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SpeedSettingsNavRow("Отображение", "Шрифт, направляющая, контекст и прогресс") { onOpen(SpeedSettingsPanel.DISPLAY) }
+            SpeedSettingsNavRow("Поведение", "Тапы, пауза, картинки и начало главы") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
+            SpeedSettingsNavRow("Голос и озвучка", "Офлайн-голоса, скорость, высота тона") { onOpen(SpeedSettingsPanel.VOICE) }
+            if (settings.useWastelandDesign || settings.useCyberpunkDesign) {
+                SpeedSettingsNavRow("Экранные эффекты", "CRT, развёртка, свечение, шум") { onOpen(SpeedSettingsPanel.EFFECTS) }
+            }
+            SpeedSettingsNavRow("Расширенные", "RSVP, точные тайминги, геометрия и цвета") { onOpen(SpeedSettingsPanel.ADVANCED) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedVoiceSettingsSheet(
+    settings: ReaderSettings,
+    voices: List<SpeedSpeechNarrator.AvailableVoice>,
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ModalSheetHeader(title = "Голос и озвучка", onBack = onBack, onClose = onDismiss)
+            Text(
+                "Speed Reader использует только офлайн-голоса установленного Android TTS. " +
+                    "Отдельная нейросетевая модель в приложение пока не встроена.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            SettingsValueSlider(
+                title = "Скорость речи",
+                value = settings.narrationRate,
+                range = 0.6f..1.4f,
+                format = { "${(it * 100).toInt()}%" },
+            ) { value -> viewModel.updateSettings { it.copy(narrationRate = value) } }
+            SettingsValueSlider(
+                title = "Высота голоса",
+                value = settings.narrationPitch,
+                range = 0.75f..1.25f,
+                format = { "${(it * 100).toInt()}%" },
+            ) { value -> viewModel.updateSettings { it.copy(narrationPitch = value) } }
+            SettingsToggleRow(
+                title = "Следующая глава",
+                subtitle = "Сохранять настройку автоперехода при обычной озвучке.",
+                checked = settings.narrationAutoNextChapter,
+            ) { enabled -> viewModel.updateSettings { it.copy(narrationAutoNextChapter = enabled) } }
+            Text("Офлайн-голоса", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (voices.isEmpty()) "Загрузка голосов или офлайн-голоса не установлены."
+                else "Выберите установленный голос. Текущий голос будет применён при следующем запуске речи.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = settings.narrationVoiceId.isBlank(),
+                    onClick = { viewModel.updateSettings { it.copy(narrationVoiceId = "") } },
+                    label = { Text("Автовыбор") },
+                )
+            }
+            voices.forEach { voice ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { viewModel.updateSettings { it.copy(narrationVoiceId = voice.id) } },
+                    color = if (settings.narrationVoiceId == voice.id)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text(
+                        text = "${if (settings.narrationVoiceId == voice.id) "✓ " else ""}${voice.id} · ${voice.language}",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeedSettingsNavRow(title: String, subtitle: String, onClick: () -> Unit) {
+    if (LocalFluxThemeMode.current.isExperimentalChrome) {
+        ExperimentalPanel(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+            contentPadding = 12.dp,
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(title.uppercase(), style = MaterialTheme.typography.titleMedium, color = LocalFluxThemeMode.current.chromeAccent)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalFluxThemeMode.current.chromeText.copy(alpha = 0.82f))
+                }
+                Text(">", color = LocalFluxThemeMode.current.chromeAccent, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedDisplaySheet(
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ModalSheetHeader(
+                title = "Отображение",
+                onBack = onBack,
+                onClose = onDismiss,
+            )
+            SettingsToggleRow(
+                title = "Тема читалки",
+                subtitle = "Использовать фон, текст и акцент текущей темы Flux Reader.",
+                checked = settings.speedUseReaderTheme,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedUseReaderTheme = enabled) } }
+            Text("Шрифт", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(ReaderFontMode.SYSTEM, ReaderFontMode.SANS, ReaderFontMode.SERIF).forEach { FontModeChip(it, settings, viewModel) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(ReaderFontMode.MONO, ReaderFontMode.JETBRAINS_NERD).forEach { FontModeChip(it, settings, viewModel) }
+            }
+            if (settings.speedFontMode == ReaderFontMode.JETBRAINS_NERD) {
+                JetBrainsNerdFontImporter(settings = settings, onUpdate = viewModel::updateSettings)
+            }
+            SettingsToggleRow(
+                title = "Направляющая ORP",
+                subtitle = "Короткие метки показывают фиксированную точку взгляда, как в Reedy.",
+                checked = settings.speedShowGuide,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedShowGuide = enabled) } }
+            SettingsToggleRow(
+                title = "Следующие слова",
+                subtitle = "Показывать периферийный серый контекст справа от текущей фиксации.",
+                checked = settings.speedReedyFlowEnabled,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedReedyFlowEnabled = enabled) } }
+            Text(
+                "По умолчанию точка взгляда находится в левой трети экрана, а все RSVP-слова рисуются одним размером. Справа остаётся больше места для серого контекста.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text("Сегмент под словом", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                SpeedLowerSegmentMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = settings.speedLowerSegmentMode == mode,
+                        onClick = { viewModel.updateSettings { it.copy(speedLowerSegmentMode = mode) } },
+                        label = { Text(when (mode) {
+                            SpeedLowerSegmentMode.OFF -> "Выкл."
+                            SpeedLowerSegmentMode.CURRENT -> "Сегмент"
+                            SpeedLowerSegmentMode.CONTEXT -> "Контекст"
+                        }) },
+                    )
+                }
+            }
+            SettingsToggleRow(
+                title = "Прогресс",
+                subtitle = "Тонкая полоса прогресса в верхней части экрана.",
+                checked = settings.speedShowProgress,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedShowProgress = enabled) } }
+            if (settings.speedShowProgress) {
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    SpeedProgressMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = settings.speedProgressMode == mode,
+                            onClick = { viewModel.updateSettings { it.copy(speedProgressMode = mode) } },
+                            label = { Text(when (mode) {
+                                SpeedProgressMode.CHAPTER -> "Глава"
+                                SpeedProgressMode.BOOK -> "Книга"
+                                SpeedProgressMode.BOTH -> "Оба"
+                            }) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedBehaviorSheet(
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ModalSheetHeader(
+                title = "Поведение",
+                onBack = onBack,
+                onClose = onDismiss,
+            )
+            SettingsToggleRow(
+                title = "Тап = Play / Pause",
+                subtitle = "Один тап — Play/Pause в обычном и полном экране; двойной тап — переключить полноэкранный режим.",
+                checked = settings.speedTapToToggle,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedTapToToggle = enabled) } }
+            SettingsToggleRow(
+                title = "Кнопки громкости",
+                subtitle = "Короткое нажатие — Play / Pause; удержание — предыдущее или следующее предложение.",
+                checked = settings.speedVolumeKeysEnabled,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedVolumeKeysEnabled = enabled) } }
+            SettingsToggleRow(
+                title = "Текст на паузе",
+                subtitle = "На паузе показывать окружающий абзац. По слову можно тапнуть и продолжить с него.",
+                checked = settings.speedShowPausePreview,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedShowPausePreview = enabled) } }
+            SettingsToggleRow(
+                title = "Умный возврат после паузы",
+                subtitle = "После долгой паузы вернуться к началу текущего предложения.",
+                checked = settings.speedAutoRewindAfterPause,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedAutoRewindAfterPause = enabled) } }
+            SettingsValueSlider("Картинка на экране", settings.speedImagePauseMs.toFloat(), 800f..8000f, { String.format("%.1f с", it / 1000f) }) { value ->
+                viewModel.updateSettings { it.copy(speedImagePauseMs = value.toInt()) }
+            }
+            SettingsValueSlider("Заставка новой главы", settings.speedChapterIntroMs.toFloat(), 0f..5000f, { if (it < 100f) "выкл." else String.format("%.1f с", it / 1000f) }) { value ->
+                viewModel.updateSettings { it.copy(speedChapterIntroMs = value.toInt()) }
+            }
+            Text(
+                "После изображения и заставки главы плавное ускорение запускается заново, поэтому текст не стартует рывком на полной скорости.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedAdvancedSheet(
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ModalSheetHeader(
+                title = "Расширенные",
+                onBack = onBack,
+                onClose = onDismiss,
+            )
+            Text("Механика RSVP", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SpeedMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = settings.speedMode == mode,
+                        onClick = { viewModel.updateSettings { current ->
+                            val count = when (mode) {
+                                SpeedMode.RSVP -> 1
+                                SpeedMode.PHRASE -> current.speedWordsPerFixation.coerceAtLeast(2)
+                                SpeedMode.FOCUS -> current.speedWordsPerFixation.coerceAtLeast(3)
+                            }
+                            current.copy(speedMode = mode, speedWordsPerFixation = count)
+                        } },
+                        label = { Text(speedModeLabel(mode)) },
+                    )
+                }
+            }
+            if (settings.speedMode != SpeedMode.RSVP) {
+                val minWords = if (settings.speedMode == SpeedMode.FOCUS) 3f else 2f
+                SettingsValueSlider("Слов за фиксацию", settings.speedWordsPerFixation.toFloat(), minWords..7f, { it.toInt().toString() }) { value ->
+                    viewModel.updateSettings { it.copy(speedWordsPerFixation = value.toInt()) }
+                }
+            }
+            SettingsToggleRow(
+                title = "Умная разбивка",
+                subtitle = "Не оставлять пунктуацию и короткие связки в неестественных местах.",
+                checked = settings.speedSmartChunking,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedSmartChunking = enabled) } }
+            SettingsToggleRow(
+                title = "Адаптивная длина",
+                subtitle = "Сложные фрагменты получают меньше слов за одну фиксацию.",
+                checked = settings.speedAdaptiveChunkSize,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedAdaptiveChunkSize = enabled) } }
+
+            Text("Тайминги", style = MaterialTheme.typography.titleMedium)
+            SettingsToggleRow(
+                title = "Микропаузы",
+                subtitle = "Дополнительное время на пунктуации и сложных словах.",
+                checked = settings.speedMicroPausesEnabled,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedMicroPausesEnabled = enabled) } }
+            if (settings.speedMicroPausesEnabled) {
+                SettingsValueSlider("Конец предложения", settings.speedSentencePauseMs.toFloat(), 0f..700f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedSentencePauseMs = value.toInt()) } }
+                SettingsValueSlider("Запятая / ; / :", settings.speedClausePauseMs.toFloat(), 0f..350f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedClausePauseMs = value.toInt()) } }
+                SettingsValueSlider("Абзац", settings.speedParagraphPauseMs.toFloat(), 0f..1200f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedParagraphPauseMs = value.toInt()) } }
+                SettingsValueSlider("Замедление длинных слов", settings.speedLongWordSlowdownPercent.toFloat(), 0f..60f, { "${it.toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedLongWordSlowdownPercent = value.toInt()) } }
+            }
+            SettingsToggleRow(
+                title = "Плавный разгон",
+                subtitle = "После старта, картинки и новой главы скорость набирается постепенно.",
+                checked = settings.speedGradualAcceleration,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedGradualAcceleration = enabled) } }
+            if (settings.speedGradualAcceleration) {
+                SettingsValueSlider("Разгон", settings.speedAccelerationSeconds.toFloat(), 1f..20f, { "${it.toInt()} с" }) { value -> viewModel.updateSettings { it.copy(speedAccelerationSeconds = value.toInt()) } }
+                SettingsValueSlider("Начальная скорость", settings.speedAccelerationStartPercent.toFloat(), 45f..100f, { "${it.toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedAccelerationStartPercent = value.toInt()) } }
+            }
+            if (settings.speedAutoRewindAfterPause) {
+                SettingsValueSlider("Долгая пауза после", settings.speedAutoRewindThresholdSeconds.toFloat(), 3f..60f, { "${it.toInt()} с" }) { value -> viewModel.updateSettings { it.copy(speedAutoRewindThresholdSeconds = value.toInt()) } }
+            }
+
+            Text("Геометрия текста", style = MaterialTheme.typography.titleMedium)
+            SettingsToggleRow(
+                title = "Одинаковый размер слов",
+                subtitle = "Не менять кегль от слова к слову. По умолчанию включено — глазам не нужно постоянно адаптироваться.",
+                checked = settings.speedFixedFontSize,
+            ) { enabled -> viewModel.updateSettings { it.copy(speedFixedFontSize = enabled) } }
+            SettingsValueSlider("Позиция точки взгляда", settings.speedHorizontalFocusFraction, 0.18f..0.50f, { "${(it * 100).toInt()}%" }) { value ->
+                viewModel.updateSettings { it.copy(speedHorizontalFocusFraction = value) }
+            }
+            if (!settings.speedFixedFontSize) {
+                SettingsValueSlider("Минимум автоподгонки", settings.speedMinFontSizeSp, 16f..settings.speedFontSizeSp, { "${it.toInt()} sp" }) { value -> viewModel.updateSettings { it.copy(speedMinFontSizeSp = value) } }
+            }
+            SettingsValueSlider("Насыщенность", settings.speedFontWeight.toFloat(), 300f..900f, { it.toInt().toString() }) { value -> viewModel.updateSettings { it.copy(speedFontWeight = (value.toInt() / 100 * 100).coerceIn(300, 900)) } }
+            SettingsValueSlider("Межбуквенный интервал", settings.speedLetterSpacingSp, -2f..6f, { String.format("%.1f sp", it) }) { value -> viewModel.updateSettings { it.copy(speedLetterSpacingSp = value) } }
+            SettingsValueSlider("Ширина зоны", settings.speedTextWidthFraction, 0.55f..1f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedTextWidthFraction = value) } }
+            SettingsValueSlider("Высота фиксации", settings.speedVerticalPosition, 0.25f..0.75f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedVerticalPosition = value) } }
+            SettingsValueSlider("Следующих слов", settings.speedPeripheralWords.toFloat(), 0f..6f, { it.toInt().toString() }) { value -> viewModel.updateSettings { it.copy(speedPeripheralWords = value.toInt()) } }
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                SpeedFocusStyle.entries.forEach { style ->
+                    FilterChip(
+                        selected = settings.speedFocusStyle == style,
+                        onClick = { viewModel.updateSettings { it.copy(speedFocusStyle = style) } },
+                        label = { Text(if (style == SpeedFocusStyle.CHARACTER) "ORP-буква" else "Слово") },
+                    )
+                }
+            }
+            if (!settings.speedFixedFontSize) {
+                SettingsToggleRow(
+                    title = "Автоподгонка",
+                    subtitle = "Уменьшать только слова, которые не помещаются в доступную область.",
+                    checked = settings.speedAutoFitText,
+                ) { enabled -> viewModel.updateSettings { it.copy(speedAutoFitText = enabled) } }
+            }
+
+            if (settings.speedShowGuide) {
+                Text("Направляющая", style = MaterialTheme.typography.titleMedium)
+                SettingsToggleRow(
+                    title = "Поперечные метки",
+                    subtitle = "Короткие штрихи сверху и снизу ORP.",
+                    checked = settings.speedShowFocusTicks,
+                ) { enabled -> viewModel.updateSettings { it.copy(speedShowFocusTicks = enabled) } }
+                SettingsValueSlider("Высота", settings.speedGuideHeightFraction, 0.15f..0.80f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedGuideHeightFraction = value) } }
+                SettingsValueSlider("Толщина", settings.speedGuideWidthDp, 0.5f..4f, { String.format("%.1f dp", it) }) { value -> viewModel.updateSettings { it.copy(speedGuideWidthDp = value) } }
+            }
+
+            Text("Цвета", style = MaterialTheme.typography.titleMedium)
+            RgbEditor("Текст", settings.speedTextColorArgb) { color -> viewModel.updateSettings { it.copy(speedTextColorArgb = color) } }
+            RgbEditor("Фокус", settings.speedFocusColorArgb) { color -> viewModel.updateSettings { it.copy(speedFocusColorArgb = color) } }
+            RgbEditor("Фон", settings.speedBackgroundColorArgb) { color -> viewModel.updateSettings { it.copy(speedBackgroundColorArgb = color) } }
+            RgbEditor("Направляющая", settings.speedGuideColorArgb) { color -> viewModel.updateSettings { it.copy(speedGuideColorArgb = color) } }
+        }
+    }
+}
+
+@Composable
+private fun FontModeChip(font: ReaderFontMode, settings: ReaderSettings, viewModel: AppViewModel) {
+    FilterChip(
+        selected = settings.speedFontMode == font,
+        onClick = { viewModel.updateSettings { it.copy(speedFontMode = font) } },
+        label = { Text(speedFontLabel(font)) },
+    )
+}
+
+@Composable
+private fun RgbEditor(title: String, argb: Int, onCommit: (Int) -> Unit) {
+    var draft by remember(argb) { mutableIntStateOf(argb) }
+    val alpha = (draft ushr 24) and 0xFF
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Surface(modifier = Modifier.size(30.dp), color = Color(draft), shape = MaterialTheme.shapes.small) {}
+        }
+        ColorChannel(
+            name = "R",
+            value = (draft ushr 16) and 0xFF,
+            tint = Color(0xFFE35D6A.toInt()),
+            onValueChange = { value -> draft = composeArgb(alpha, value, (draft ushr 8) and 0xFF, draft and 0xFF) },
+            onFinished = { onCommit(draft) },
+        )
+        ColorChannel(
+            name = "G",
+            value = (draft ushr 8) and 0xFF,
+            tint = Color(0xFF55B66D.toInt()),
+            onValueChange = { value -> draft = composeArgb(alpha, (draft ushr 16) and 0xFF, value, draft and 0xFF) },
+            onFinished = { onCommit(draft) },
+        )
+        ColorChannel(
+            name = "B",
+            value = draft and 0xFF,
+            tint = Color(0xFF5D7FE3.toInt()),
+            onValueChange = { value -> draft = composeArgb(alpha, (draft ushr 16) and 0xFF, (draft ushr 8) and 0xFF, value) },
+            onFinished = { onCommit(draft) },
+        )
+    }
+}
+
+@Composable
+private fun ColorChannel(
+    name: String,
+    value: Int,
+    tint: Color,
+    onValueChange: (Int) -> Unit,
+    onFinished: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(name, modifier = Modifier.width(22.dp), color = tint, fontWeight = FontWeight.Bold)
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.toInt().coerceIn(0, 255)) },
+            onValueChangeFinished = onFinished,
+            valueRange = 0f..255f,
+            modifier = Modifier.weight(1f),
+        )
+        Text(value.toString(), modifier = Modifier.width(34.dp), textAlign = TextAlign.End)
+    }
+}
+
+private fun pacingLabel(mode: SpeedPacingMode): String = when (mode) {
+    SpeedPacingMode.CONSTANT -> "Ровно"
+    SpeedPacingMode.SMART -> "Умно"
+    SpeedPacingMode.DEEP -> "Глубоко"
+}
+
+private fun speedModeLabel(mode: SpeedMode): String = when (mode) {
+    SpeedMode.RSVP -> "RSVP"
+    SpeedMode.PHRASE -> "Фраза"
+    SpeedMode.FOCUS -> "Фокус"
+}
+
+private fun speedFontLabel(font: ReaderFontMode): String = when (font) {
+    ReaderFontMode.SYSTEM -> "Система"
+    ReaderFontMode.SERIF -> "Книжный"
+    ReaderFontMode.SANS -> "Sans"
+    ReaderFontMode.MONO -> "Mono"
+    ReaderFontMode.JETBRAINS_NERD -> "JetBrains Nerd"
+}
+
+private fun composeArgb(a: Int, r: Int, g: Int, b: Int): Int =
+    ((a and 0xFF) shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
+

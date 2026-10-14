@@ -1,0 +1,24 @@
+Flux Reader 0.2.0-alpha.23 — validation
+versionCode: 20031
+
+Implemented:
+  - Speed Reader keeps the Android screen awake for the whole speed-reading session and restores the previous flag on exit;
+  - RSVP ORP glyph is aligned from its measured TextLayoutResult bounding box to the exact center of the fixation guide;
+  - optional Reedy-style peripheral context renders the next 0–6 words to the right in progressively dimmer text without shifting the active word;
+  - normal Reader can enter "Скорочтение с выбранного слова" mode and start Speed Reader from the tapped whole-word boundary;
+  - tapped positions are mapped from both Scroll and prepared Screen Paging text slices into ChapterContent.plainText();
+  - Speed Reader progress can show CHAPTER, BOOK, or BOTH, with CHAPTER as the default;
+  - previous smart pacing, persistent lower segment, guide clearance and alpha.22 whole-line page safety are preserved.
+
+Checks completed:
+  PASS  bash scripts/selfcheck.command --static in the build workspace
+  PASS  pure Kotlin compile + executable smoke for SpeedReaderCursor.wordStartOffset(), followingTokens(), and ChapterSpeedOffset.forBlock()
+  PASS  bare-kotlinc parser scan of ReaderScreen.kt + SpeedReaderScreen.kt: no parser/syntax diagnostics (Android/Compose unresolved references are expected without their classpath)
+  PASS  ZIP integrity with unzip -t
+  PASS  clean ZIP unpack + alpha.23 static self-check
+  PASS  pure Kotlin smoke repeated from the unpacked clean ZIP
+  PASS  alpha.22 -> alpha.23 patch --dry-run -p1
+  PASS  patch applied to a clean alpha.22 tree; resulting version=0.2.0-alpha.23 / versionCode=20031 and static self-check passed
+
+Android build note:
+  Full Android/Compose Gradle compile could not run in this isolated environment. The wrapper requires Gradle 9.6.0 and attempted to download https://services.gradle.org/distributions/gradle-9.6.0-bin.zip, but external DNS/network access is unavailable here (UnknownHostException). The supplied macOS selfcheck/install scripts run the real Android compile and unit tests in the user's configured Android SDK environment.
