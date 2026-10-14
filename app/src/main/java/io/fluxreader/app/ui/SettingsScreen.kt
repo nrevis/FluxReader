@@ -139,7 +139,7 @@ fun SettingsScreen(
                     SettingsSection.LIBRARY -> LibrarySettings(settings, viewModel)
                     SettingsSection.SPEED -> SpeedSettings(settings, viewModel)
                     SettingsSection.OCR -> OcrSettings(settings, viewModel)
-                    SettingsSection.ABOUT -> AboutSettings()
+                    SettingsSection.ABOUT -> AboutSettings(viewModel)
                 }
                 Spacer(Modifier.height(28.dp))
             }
@@ -440,7 +440,7 @@ private fun OcrSettings(settings: ReaderSettings, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun AboutSettings() {
+private fun AboutSettings(viewModel: AppViewModel) {
     SectionTitle(Icons.Default.Info, FluxIconRole.ABOUT, "О программе")
     Text("Flux Reader", style = MaterialTheme.typography.headlineSmall)
     Text(
@@ -452,6 +452,8 @@ private fun AboutSettings() {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    HorizontalDivider()
+    GitHubUpdateControls(viewModel)
     HorizontalDivider()
     Text(
         "Офлайн-читалка EPUB, FB2, FB2.ZIP, TXT и PDF с библиотекой и папками, гибким форматированием, полноэкранным и постраничным чтением, скорочтением, поиском, оглавлением и OCR для PDF-сканов.",

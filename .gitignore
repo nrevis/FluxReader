@@ -6,3 +6,8 @@ local.properties
 *.keystore
 .DS_Store
 dist/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*

@@ -25,6 +25,7 @@ python3 scripts/review_alpha83.py
 python3 scripts/review_alpha90.py
 python3 scripts/review_alpha91.py --self-test
 python3 scripts/review_alpha92.py
+python3 scripts/review_alpha93.py
 python3 scripts/check_kotlin_imports.py
 python3 scripts/check_extension_imports.py --self-test
 python3 scripts/check_compose_symbols.py
@@ -34,8 +35,11 @@ python3 scripts/test_kotlin_import_checker.py
 echo "▶ Version / clean-line integrity"
 bash scripts/verify-version.command
 python3 scripts/test_version_preflight.py
-if grep -Rqs 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then
-  echo "❌ INTERNET permission не должен быть нужен базовой ветке."
+# Internet access is now strictly for the opt-in GitHub Releases updater.
+# Narration and book reading remain offline-first.
+if grep -Rqs 'android.permission.INTERNET' app/src/main/AndroidManifest.xml &&
+   [[ ! -s app/src/main/java/io/fluxreader/app/update/GitHubUpdateManager.kt ]]; then
+  echo "❌ Интернет-разрешение допускается только вместе с проверяемым модулем GitHub Updates."
   exit 10
 fi
 for stale in TextReaderScreen.kt ReaderViewModel.kt BookRepository.kt; do
@@ -1726,7 +1730,7 @@ grep -Fq 'onTogglePlayback = togglePlayback' app/src/main/java/io/fluxreader/app
 grep -Fq 'voiceEnabled = voiceMode' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt || exit 289
 if grep -Fq 'NarrationInlineBar(' app/src/main/java/io/fluxreader/app/ui/ReaderScreen.kt; then echo '❌ narration controls must be in Speed Reader only'; exit 290; fi
 grep -Fq 'prefetchNext()' app/src/main/java/io/fluxreader/app/reader/ReaderNarrator.kt || exit 291
-if grep -Rqs 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then exit 292; fi
+test -s app/src/main/java/io/fluxreader/app/update/GitHubUpdateManager.kt || exit 292
 test -s app/src/main/java/io/fluxreader/app/reader/SpeedSpeechNarrator.kt || exit 293
 test -s app/src/main/java/io/fluxreader/app/reader/SpeedSpeechText.kt || exit 294
 grep -Fq 'onRangeStart(utteranceId:' app/src/main/java/io/fluxreader/app/reader/SpeedSpeechNarrator.kt || exit 295
@@ -1776,8 +1780,11 @@ echo "▶ Offline narration / paired pagination font"
 if grep -RinE 'ElevenLabs|elevenlabs|xi-api-key|api\.elevenlabs' app/src/main/java app/src/main/AndroidManifest.xml; then
     echo "❌ Unrequested ElevenLabs integration found"; exit 72
 fi
-if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then
-    echo "❌ Cloud permission slipped into local narration update"; exit 73
+# A network permission is required for separate GitHub Updates, not for narration.
+# Keep external speech APIs forbidden while allowing the updater itself.
+if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml &&
+   [[ ! -s app/src/main/java/io/fluxreader/app/update/GitHubUpdateManager.kt ]]; then
+    echo "❌ Необъяснённое сетевое разрешение"; exit 73
 fi
 python3 - <<'PYCHECK'
 from pathlib import Path

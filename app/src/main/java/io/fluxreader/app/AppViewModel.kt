@@ -11,6 +11,7 @@ import android.util.LruCache
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.fluxreader.app.audio.AudiobookController
+import io.fluxreader.app.update.GitHubUpdateManager
 import io.fluxreader.app.data.BookFormat
 import io.fluxreader.app.data.BookMetadata
 import io.fluxreader.app.data.BookOutline
@@ -133,6 +134,14 @@ private data class LoadedSpeedChapter(
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    private val updateManager = GitHubUpdateManager(application, viewModelScope)
+    val githubUpdates = updateManager.state
+    fun checkForUpdates() = updateManager.check()
+    fun setAutoUpdateCheck(enabled: Boolean) = updateManager.setAutoCheck(enabled)
+    fun setPreReleaseUpdates(enabled: Boolean) = updateManager.setIncludePreReleases(enabled)
+    fun downloadGitHubUpdate() = updateManager.download()
+    fun installGitHubUpdate() = updateManager.requestInstall()
+
     private val libraryRepository = LibraryRepository(application)
     private val settingsRepository = ReaderSettingsRepository(application)
     private val contentRepository = BookContentRepository(application)
