@@ -32,8 +32,9 @@ checks={
      ("bookmarks under overflow", 'Text("Закладки и заметки")' in header),
      ("text settings under overflow", 'Text("Параметры текста")' in header),
      ("speech is exclusive to Speed Reader", 'Text("Озвучивание")' not in header and 'onNarrationToggle' not in reader),
-     ("fullscreen toggles on page tap", 'onCenterTap = { setChromeVisiblePreservingPosition(false) }' in reader
-      and 'onCenterTap = { setChromeVisiblePreservingPosition(true) }' in reader),
+     ("fullscreen toggles on page tap", 'onCenterTap = { setChromeVisiblePreservingPosition(!chromeVisible) }' in reader
+      and 'BackHandler(enabled = !chromeVisible && selectedText == null)' in reader
+      and 'setChromeVisiblePreservingPosition(true)' in reader),
   ],
   "Speed narration": [
      ("narration sheet route", 'SpeedSettingsPanel.VOICE -> SpeedVoiceSettingsSheet(' in speed),

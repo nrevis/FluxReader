@@ -1061,7 +1061,7 @@ if grep -q 'Text("Скорочтение", style = MaterialTheme.typography.labe
   echo "❌ alpha.46: labeled speed pill returned to Reader bottom bar"
   exit 88
 fi
-grep -q 'onCenterTap = { setChromeVisiblePreservingPosition(false) }' "$READER_UI" || {
+grep -q 'onCenterTap = { setChromeVisiblePreservingPosition(!chromeVisible) }' "$READER_UI" || {
   echo "❌ alpha.82: tap-to-immersive entry action missing"
   exit 89
 }
@@ -1387,8 +1387,8 @@ grep -q 'class ReaderAnnotationHitPolicyTest' app/src/test/java/io/fluxreader/ap
 python3 - <<'PYALPHA52'
 from pathlib import Path
 reader = Path('app/src/main/java/io/fluxreader/app/ui/ReaderScreen.kt').read_text()
-if reader.count('onSelectionEdgeDrag = ::handleSelectionEdgeDrag') < 2:
-    raise SystemExit('❌ alpha.52: edge selection controller is not wired to both Reader layouts')
+if reader.count('onSelectionEdgeDrag = ::handleSelectionEdgeDrag') != 1:
+    raise SystemExit('❌ alpha.52: edge selection controller must be wired once to the shared Reader viewport')
 if 'block.links.isNotEmpty() || annotations.isNotEmpty()' not in reader:
     raise SystemExit('❌ alpha.52: saved annotation taps are not child-owned')
 if 'val target = if (direction < 0) slices.lastOrNull() else slices.firstOrNull()' not in reader:

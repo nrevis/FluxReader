@@ -5,15 +5,16 @@ This is a targeted source guard, not a replacement for real Gradle compilation.
 """
 from pathlib import Path
 import argparse
+import re
 import sys
 
 
 def check(source: str) -> list[str]:
     errors = []
-    marker = 'The upper camera lane is an overlay'
-    if marker not in source:
-        return ['Cannot find the immersive Reader branch']
-    start = source.index(marker)
+    calls = list(re.finditer(r'^\s+ReaderContent\(', source, re.M))
+    if len(calls) != 1:
+        return ['ReaderContent must have one composition slot across fullscreen changes']
+    start = calls[0].start()
     end = source.find('ReaderCutoutStatus(', start)
     if end == -1:
         return ['Immersive ReaderCutoutStatus is missing']
@@ -22,6 +23,8 @@ def check(source: str) -> list[str]:
         errors.append('Immersive ReaderContent must use pageAnimationModifier without Row/Column weight')
     if '.weight(' in immersive:
         errors.append('Modifier.weight is illegal in the fullscreen BoxScope')
+    if 'isFullscreen = !chromeVisible,' not in immersive:
+        errors.append('The shared reader must switch fullscreen by parameter')
     if 'Box(Modifier.fillMaxSize().then(fullscreenTransitionModifier))' not in source[:start][-600:]:
         errors.append('Fullscreen reader must have a full-size Box parent')
     if 'modifier\n            .fillMaxSize()' not in source:
@@ -47,6 +50,8 @@ def main() -> int:
         assert any('weight' in e for e in check(broken)), 'checker failed to detect original bug'
         broken_import = source.replace('package io.fluxreader.app.ui', 'package io.fluxreader.app.ui\nimport androidx.compose.foundation.layout.weight')
         assert any('imported' in e or 'import' in e for e in check(broken_import)), 'checker failed illegal-import regression'
+        split_slots = source.replace('ReaderContent(', 'ReaderContent(\n ReaderContent(', 1)
+        assert any('composition slot' in e for e in check(split_slots)), 'checker failed split-slot regression'
         print('PASS: self-test detects old BoxScope.weight and illegal import')
     print('PASS: Immersive ReaderContent fills Box without BoxScope.weight')
     return 0

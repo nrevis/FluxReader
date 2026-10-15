@@ -172,13 +172,6 @@ private data class ReaderAnnotationPopupTarget(
     val positionInWindow: Offset,
 )
 
-private data class ReaderPageLocation(
-    val chapterIndex: Int,
-    val blockIndex: Int,
-    val blockOffsetPx: Int,
-    val blockCharOffset: Int = 0,
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -899,15 +892,27 @@ fun ReaderScreen(
     }
 
     fun acceptPreparedPagination(next: PreparedReaderPagination) {
-        val previous = pendingViewportAnchor ?: currentPreparedLocation()
+        if (next.chapterIndex != state.chapterIndex) return
+        // System bars and the experimental shell settle in separate measurements. A complete
+        // intermediate layout must not replace the locked source anchor with its page start.
+        val previous = ReaderViewportAnchor.forPagination(
+            chapterIndex = state.chapterIndex,
+            pending = pendingViewportAnchor,
+            locked = stableViewportAnchor.takeIf { viewportAnchorLocked },
+            visible = currentPreparedLocation(),
+            initial = ReaderPageLocation(
+                state.chapterIndex, state.initialBlockIndex,
+                state.initialBlockOffsetPx, state.initialBlockCharOffset,
+            ),
+        )
         val changed = preparedPagination?.layoutKey != next.layoutKey ||
             preparedPagination?.chapterIndex != next.chapterIndex ||
             preparedPagination?.isComplete != next.isComplete
         preparedPagination = next
         if (changed) {
-            val targetBlock = previous?.blockIndex ?: state.initialBlockIndex
-            val targetChar = previous?.blockCharOffset ?: state.initialBlockCharOffset
-            val legacyPx = if (previous == null) state.initialBlockOffsetPx else 0
+            val targetBlock = previous.blockIndex
+            val targetChar = previous.blockCharOffset
+            val legacyPx = previous.blockOffsetPx
             preparedPageIndex = findPreparedPageIndex(
                 pagination = next,
                 blockIndex = targetBlock,
@@ -1107,69 +1112,42 @@ fun ReaderScreen(
                 val activeListState = listState
                 if (activeListState != null) {
                     Box(Modifier.fillMaxSize().then(fullscreenTransitionModifier)) {
+                        // One composition slot keeps pagination and scroll observers alive while
+                        // chrome and the ancestor experimental shell change their geometry.
+                        ReaderContent(
+                            state = state,
+                            settings = settings,
+                            modifier = pageAnimationModifier,
+                            viewModel = viewModel,
+                            listState = activeListState,
+                            scaffoldPadding = scaffoldPadding,
+                            chromeVisible = chromeVisible,
+                            isFullscreen = !chromeVisible,
+                            onPreviousPage = { previousPage() },
+                            onNextPage = { nextPage() },
+                            onCenterTap = { setChromeVisiblePreservingPosition(!chromeVisible) },
+                            onOpenLink = ::openReaderLink,
+                            selectedText = selectedText,
+                            annotations = bookAnnotations,
+                            onTextRangeSelection = ::updateReaderTextSelection,
+                            onSelectionHandleDrag = ::updateSelectionHandle,
+                            onSelectionEdgeDrag = ::handleSelectionEdgeDrag,
+                            onAnnotationTap = ::openAnnotationPopup,
+                            viewportAnchor = pendingViewportAnchor ?: stableViewportAnchor.takeIf { viewportAnchorLocked },
+                            measuredLineTops = measuredLineTops,
+                            preparedPagination = preparedPagination,
+                            preparedPageIndex = preparedPageIndex,
+                            paginationCache = preparedPaginationCache,
+                            onPreparedPagination = ::acceptPreparedPagination,
+                        )
                         if (!chromeVisible) {
-                            // The upper camera lane is an overlay, NOT a measured extra row:
-                            // the reader takes the whole viewport and only its first text line
-                            // clears the physical cutout. Left/right progress can use the lane.
-                            ReaderContent(
-                                    state = state,
-                                    settings = settings,
-                                    modifier = pageAnimationModifier,
-                                    viewModel = viewModel,
-                                    listState = activeListState,
-                                    scaffoldPadding = scaffoldPadding,
-                                    chromeVisible = chromeVisible,
-                                    isFullscreen = true,
-                                    onPreviousPage = { previousPage() },
-                                    onNextPage = { nextPage() },
-                                    onCenterTap = { setChromeVisiblePreservingPosition(true) },
-                                    onOpenLink = ::openReaderLink,
-                                    selectedText = selectedText,
-                                    annotations = bookAnnotations,
-                                    onTextRangeSelection = ::updateReaderTextSelection,
-                                    onSelectionHandleDrag = ::updateSelectionHandle,
-                                    onSelectionEdgeDrag = ::handleSelectionEdgeDrag,
-                                    onAnnotationTap = ::openAnnotationPopup,
-                                    viewportAnchor = pendingViewportAnchor,
-                                    measuredLineTops = measuredLineTops,
-                                    preparedPagination = preparedPagination,
-                                    preparedPageIndex = preparedPageIndex,
-                                    paginationCache = preparedPaginationCache,
-                                    onPreparedPagination = ::acceptPreparedPagination,
-                                )
+                            // The upper camera lane is an overlay, not a measured extra row.
                             ReaderCutoutStatus(
                                 state = state,
                                 preparedPageIndex = if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) preparedPageIndex else null,
                                 preparedPageCount = if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) preparedPagination?.takeIf { it.isComplete }?.pages?.size else null,
                                 modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
                                 safeFrameAlreadyApplied = true,
-                            )
-                        } else {
-                            ReaderContent(
-                                state = state,
-                                settings = settings,
-                                modifier = pageAnimationModifier,
-                                viewModel = viewModel,
-                                listState = activeListState,
-                                scaffoldPadding = scaffoldPadding,
-                                chromeVisible = chromeVisible,
-                                isFullscreen = false,
-                                onPreviousPage = { previousPage() },
-                                onNextPage = { nextPage() },
-                                onCenterTap = { setChromeVisiblePreservingPosition(false) },
-                                onOpenLink = ::openReaderLink,
-                                selectedText = selectedText,
-                                annotations = bookAnnotations,
-                                onTextRangeSelection = ::updateReaderTextSelection,
-                                onSelectionHandleDrag = ::updateSelectionHandle,
-                                onSelectionEdgeDrag = ::handleSelectionEdgeDrag,
-                                onAnnotationTap = ::openAnnotationPopup,
-                                viewportAnchor = pendingViewportAnchor,
-                                measuredLineTops = measuredLineTops,
-                                preparedPagination = preparedPagination,
-                                preparedPageIndex = preparedPageIndex,
-                                paginationCache = preparedPaginationCache,
-                                onPreparedPagination = ::acceptPreparedPagination,
                             )
                         }
                         selectedText?.takeIf { it.menuVisible }?.let { selection ->
