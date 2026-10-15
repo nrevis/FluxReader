@@ -16,10 +16,21 @@ mkdir -p "$OUT_DIR" "$ROOT"
 rsync -a ./ "$ROOT/" \
   --exclude '.git/' \
   --exclude '.gradle/' \
+  --exclude '.kotlin/' \
+  --exclude '__pycache__/' \
+  --exclude '*.pyc' \
   --exclude 'build/' \
   --exclude 'app/build/' \
   --exclude 'dist/' \
+  --exclude '_archive/' \
+  --exclude 'CHANGELOG*' \
+  --exclude 'changelog*' \
   --exclude 'local.properties' \
+  --exclude '*.jks' \
+  --exclude '*.keystore' \
+  --exclude '.env' \
+  --exclude '.env.*' \
+  --exclude '*.log' \
   --exclude '.DS_Store'
 
 [[ -s "$ROOT/gradle/wrapper/gradle-wrapper.jar" ]] || {

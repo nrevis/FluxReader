@@ -1,0 +1,5 @@
+# Historical changelogs stay in Git, outside downloadable source archives.
+/_archive export-ignore
+/_archive/** export-ignore
+CHANGELOG* export-ignore
+changelog* export-ignore
