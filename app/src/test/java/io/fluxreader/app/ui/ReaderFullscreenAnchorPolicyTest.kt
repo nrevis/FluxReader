@@ -4,6 +4,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReaderFullscreenAnchorPolicyTest {
+    @Test fun scrolledWrappedParagraphUsesItsVisibleLineCharacter() {
+        assertEquals(120, ReaderViewportAnchor.scrollCharOffset(intArrayOf(0, 24, 48), intArrayOf(0, 60, 120), 50))
+        assertEquals(60, ReaderViewportAnchor.scrollCharOffset(intArrayOf(0, 24, 48), intArrayOf(0, 60, 120), 24))
+        assertEquals(0, ReaderViewportAnchor.scrollCharOffset(null, null, 10))
+    }
+
     private fun layout(width: Int) = PreparedReaderPagination(
         chapterIndex = 4,
         layoutKey = "width-$width",

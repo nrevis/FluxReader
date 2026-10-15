@@ -15,6 +15,8 @@ import io.fluxreader.app.update.GitHubUpdateManager
 import io.fluxreader.app.data.BookFormat
 import io.fluxreader.app.data.BookMetadata
 import io.fluxreader.app.data.BookOutline
+import io.fluxreader.app.data.ReadingPositionPolicy
+import io.fluxreader.app.data.ReadingPositionSource
 import io.fluxreader.app.data.BookRecord
 import io.fluxreader.app.data.ChapterContent
 import io.fluxreader.app.data.LibraryRepository
@@ -414,6 +416,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     restoreReaderFromSpeedPosition()
                     return
                 }
+                if (destination == AppRoute.PDF) {
+                    _speed.value.bookId?.let { openPdf(it) }
+                    return
+                }
                 if (destination == AppRoute.LIBRARY) releaseRouteStatesForLibrary()
             }
             AppRoute.READER -> {
@@ -811,8 +817,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             val outline = within(60_000, "Слишком долго читается структура книги") { contentRepository.outline(book) }
             require(outline.chapters.isNotEmpty()) { "В книге не найдено читаемых глав" }
-            val index = book.readerChapter.coerceIn(0, outline.chapters.lastIndex)
+            val index = ReadingPositionPolicy.chapter(book).coerceIn(0, outline.chapters.lastIndex)
             val chapter = within(60_000, "Слишком долго открывается глава") { contentRepository.chapter(book, outline.chapters[index]) }
+            val fromSpeed = ReadingPositionPolicy.source(book) == ReadingPositionSource.SPEED
+            val sharedAnchor = if (fromSpeed) ChapterSpeedOffset.toReaderAnchor(chapter, book.speedOffset) else null
 
             libraryRepository.updateMetadata(bookId, BookMetadata(outline.title, outline.author), outline.chapters.size)
             libraryRepository.touch(bookId)
@@ -823,9 +831,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     outline = outline,
                     chapterIndex = index,
                     chapter = chapter,
-                    initialBlockIndex = book.readerBlockIndex.coerceIn(0, chapter.blocks.lastIndex.coerceAtLeast(0)),
-                    initialBlockOffsetPx = book.readerBlockOffsetPx.coerceAtLeast(0),
-                    initialBlockCharOffset = book.readerBlockCharOffset.coerceAtLeast(0),
+                    initialBlockIndex = (sharedAnchor?.blockIndex ?: book.readerBlockIndex).coerceIn(0, chapter.blocks.lastIndex.coerceAtLeast(0)),
+                    initialBlockOffsetPx = if (fromSpeed) 0 else book.readerBlockOffsetPx.coerceAtLeast(0),
+                    initialBlockCharOffset = (sharedAnchor?.sourceCharOffset ?: book.readerBlockCharOffset).coerceAtLeast(0),
                 )
             }
             scheduleReaderPrefetch(book, outline, index)
@@ -884,12 +892,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     blockCharCount = targetBlockCharCount,
                 ),
             )
-            libraryRepository.updateReaderPosition(
-                book.id, target, safeBlock, requestedOffset, progress, requestedCharOffset,
-            )
-
             val latest = _reader.value
             if (_route.value == AppRoute.READER && latest.bookId == book.id) {
+                libraryRepository.updateReaderPosition(
+                    book.id, target, safeBlock, requestedOffset, progress, requestedCharOffset,
+                )
                 _reader.value = latest.copy(
                     loading = false,
                     chapterIndex = target,
@@ -1066,8 +1073,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun readerPrevious() = readerChapter(_reader.value.chapterIndex - 1)
     fun readerNext() = readerChapter(_reader.value.chapterIndex + 1)
 
-    fun saveReaderPosition(blockIndex: Int, blockOffsetPx: Int, blockCharOffset: Int = 0) {
+    fun saveReaderPosition(expectedBookId: String?, expectedChapter: Int, blockIndex: Int, blockOffsetPx: Int, blockCharOffset: Int = 0) {
         val state = _reader.value
+        if (!ReadingPositionPolicy.acceptsCheckpoint(
+                _route.value == AppRoute.READER, state.loading, state.bookId, state.chapterIndex,
+                expectedBookId, expectedChapter,
+            )) return
         val outline = state.outline ?: return
         val bookId = state.bookId ?: return
         val blocks = state.chapter?.blocks.orEmpty()
@@ -1094,6 +1105,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             blockCharOffset = blockCharOffset.coerceAtLeast(0),
         )
     }
+
+    fun flushReadingPosition() = libraryRepository.flushPendingPositions()
 
     fun readerRetry() {
         _reader.value.bookId?.let(::openReader)
@@ -1145,7 +1158,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         speedPause()
         cancelPdfRender()
         _route.value = AppRoute.PDF
-        _pdf.value = PdfUiState(bookId = bookId, loading = true, pageIndex = book.pdfPage)
+        _pdf.value = PdfUiState(bookId = bookId, loading = true, pageIndex = ReadingPositionPolicy.chapter(book))
 
         pdfJob = launchHandled(
             onError = { error ->
@@ -1156,7 +1169,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             val count = within(30_000, "Слишком долго открывается PDF") { contentRepository.pdfPageCount(book) }
             require(count > 0) { "PDF не содержит страниц" }
-            val page = book.pdfPage.coerceIn(0, count - 1)
+            val page = ReadingPositionPolicy.chapter(book).coerceIn(0, count - 1)
             libraryRepository.updateMetadata(book.id, BookMetadata(book.title, book.author), count)
             libraryRepository.touch(book.id)
             if (_route.value == AppRoute.PDF && _pdf.value.bookId == bookId) {
@@ -1341,8 +1354,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (_route.value != AppRoute.SPEED) routeBeforeSpeed = _route.value
         val book = libraryRepository.find(bookId) ?: return
-        val target = SpeedResumePolicy.choose(book.speedChapter, book.speedOffset, preferredChapter)
-        startSpeed(bookId, target.preferredChapter, target.preferredOffset)
+        // A live Reader/PDF entry always wins over the old mode-specific cursor.
+        val targetChapter = preferredChapter ?: ReadingPositionPolicy.chapter(book)
+        val source = if (preferredChapter != null) {
+            if (_route.value == AppRoute.PDF) ReadingPositionSource.PDF else ReadingPositionSource.READER
+        } else ReadingPositionPolicy.source(book)
+        startSpeed(bookId, targetChapter, if (source == ReadingPositionSource.SPEED) book.speedOffset else null,
+            resumeFromReader = source == ReadingPositionSource.READER)
     }
 
     fun openSpeedAt(bookId: String, chapterIndex: Int, chapterOffset: Int) {
@@ -1358,6 +1376,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         bookId: String,
         preferredChapter: Int? = null,
         preferredOffset: Int? = null,
+        resumeFromReader: Boolean = false,
     ) {
         val book = libraryRepository.find(bookId) ?: return
         retainImageCacheForBook(bookId)
@@ -1383,7 +1402,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val words = wordsForMode(settings.value.speedMode, settings.value.speedWordsPerFixation)
             val startChapter = (preferredChapter ?: book.speedChapter).coerceIn(0, outline.chapters.lastIndex)
             val savedOrChapterStart = if (preferredChapter == null || preferredChapter == book.speedChapter) book.speedOffset else 0
-            val startOffset = preferredOffset ?: savedOrChapterStart
+            val fallbackOffset = if (book.format == BookFormat.PDF && preferredChapter != null) 0 else savedOrChapterStart
+            val startOffset = if (resumeFromReader && book.format != BookFormat.PDF) {
+                val chapter = contentRepository.chapter(book, outline.chapters[startChapter])
+                ChapterSpeedOffset.forBlock(chapter, book.readerBlockIndex, book.readerBlockCharOffset)
+            } else (preferredOffset ?: fallbackOffset)
             val loaded = within(
                 60_000L,
                 if (book.format == BookFormat.PDF) "Не удалось подготовить текст PDF за 60 секунд" else "Слишком долго готовится Speed Reader",
@@ -1624,6 +1647,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         saveSpeedProgress(_speed.value, rebuilt.startOffset)
     }
 
+    fun commitSpeechPosition(bookId: String?, chapterIndex: Int, offset: Int) {
+        val state = _speed.value
+        if (!ReadingPositionPolicy.acceptsCheckpoint(
+                _route.value == AppRoute.SPEED, state.loading, state.bookId, state.chapterIndex,
+                bookId, chapterIndex,
+            )) return
+        val chunk = speedChunkAt(state.chapterText, offset.coerceAtLeast(0)) ?: return
+        _speed.value = state.copy(chunk = chunk, playing = false)
+        saveSpeedProgress(_speed.value, chunk.startOffset)
+    }
+
     fun speedSeekToOffset(offset: Int) {
         speedPause()
         jumpSpeedWithinChapter(offset.coerceAtLeast(0))
@@ -1753,6 +1787,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun saveSpeedProgress(state: SpeedUiState, offset: Int) {
+        val active = _speed.value
+        if (!ReadingPositionPolicy.acceptsCheckpoint(
+                _route.value == AppRoute.SPEED, state.loading || active.loading, active.bookId, active.chapterIndex,
+                state.bookId, state.chapterIndex,
+            )) return
         val outline = state.outline ?: return
         val bookId = state.bookId ?: return
         val chapterProgress = if (state.chapterText.isBlank()) 0f else offset.toFloat() / state.chapterText.length.toFloat()

@@ -702,23 +702,19 @@ class LibraryRepository(private val context: Context) {
         blockCharOffset: Int = 0,
     ) {
         updatePosition(bookId, progress) { book ->
-            book.copy(
-                readerChapter = chapter.coerceAtLeast(0),
-                readerBlockIndex = blockIndex.coerceAtLeast(0),
-                readerBlockOffsetPx = blockOffsetPx.coerceAtLeast(0),
-                readerBlockCharOffset = blockCharOffset.coerceAtLeast(0),
-            )
+            ReadingPositionPolicy.readerCheckpoint(book, chapter, blockIndex, blockOffsetPx, blockCharOffset)
         }
     }
 
     fun updateSpeedPosition(bookId: String, chapter: Int, offset: Int, progress: Float) {
         updatePosition(bookId, progress) { book ->
-            book.copy(speedChapter = chapter.coerceAtLeast(0), speedOffset = offset.coerceAtLeast(0))
+            ReadingPositionPolicy.speedCheckpoint(book, chapter, offset)
         }
     }
 
     fun updatePdfPosition(bookId: String, page: Int, progress: Float) {
-        updatePosition(bookId, progress) { book -> book.copy(pdfPage = page.coerceAtLeast(0)) }
+        updatePosition(bookId, progress) { book -> book.copy(pdfPage = page.coerceAtLeast(0),
+            readingPositionSource = ReadingPositionSource.PDF) }
     }
 
     private fun updatePosition(bookId: String, progress: Float, transform: (BookRecord) -> BookRecord) {
@@ -1069,6 +1065,7 @@ class LibraryRepository(private val context: Context) {
                 readerBlockCharOffset = 0,
                 speedChapter = 0,
                 speedOffset = 0,
+                readingPositionSource = null,
                 pdfPage = 0,
                 lastOpenedAt = 0L,
                 addedAt = System.currentTimeMillis(),
@@ -1243,6 +1240,9 @@ class LibraryRepository(private val context: Context) {
                         readerBlockCharOffset = obj.optInt("readerBlockCharOffset", 0).coerceAtLeast(0),
                         speedChapter = obj.optInt("speedChapter", legacyChapter).coerceAtLeast(0),
                         speedOffset = obj.optInt("speedOffset", 0).coerceAtLeast(0),
+                        readingPositionSource = ReadingPositionSource.entries.firstOrNull {
+                            it.name == obj.optString("readingPositionSource")
+                        },
                         pdfPage = obj.optInt("pdfPage", legacyChapter).coerceAtLeast(0),
                         chapterCount = obj.optInt("chapterCount", 0).coerceAtLeast(0),
                         lastOpenedAt = obj.optLong("lastOpenedAt", 0L),
@@ -1342,6 +1342,7 @@ class LibraryRepository(private val context: Context) {
                         .put("readerBlockCharOffset", book.readerBlockCharOffset)
                         .put("speedChapter", book.speedChapter)
                         .put("speedOffset", book.speedOffset)
+                        .put("readingPositionSource", book.readingPositionSource?.name.orEmpty())
                         .put("pdfPage", book.pdfPage)
                         .put("chapterCount", book.chapterCount)
                         .put("lastOpenedAt", book.lastOpenedAt)

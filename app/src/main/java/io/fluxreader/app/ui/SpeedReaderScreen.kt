@@ -177,12 +177,12 @@ fun SpeedReaderScreen(
     // a saved Speed Reader chapter would overwrite the saved word on every entry.
     speech.onSettledPosition = { at ->
         if (SpeedSpeechCheckpointPolicy.acceptNarratorOffset(voiceMode, state.chapterText.length, at)) {
-            viewModel.speedSeekToOffset(at)
+            viewModel.commitSpeechPosition(state.bookId, state.chapterIndex, at)
         }
     }
     speech.onFinished = {
         if (voiceMode && state.chapterText.isNotEmpty()) {
-            viewModel.speedSeekToOffset(state.chapterText.lastIndex.coerceAtLeast(0))
+            viewModel.commitSpeechPosition(state.bookId, state.chapterIndex, state.chapterText.lastIndex.coerceAtLeast(0))
         }
     }
     LaunchedEffect(settings.narrationVoiceId, settings.narrationRate, settings.narrationPitch) {
@@ -197,6 +197,19 @@ fun SpeedReaderScreen(
     LaunchedEffect(state.chunk?.startOffset) {
         if (voiceMode && !speech.status.value.playing) speech.setPosition(state.chunk?.startOffset ?: 0)
     }
+    LaunchedEffect(voiceMode, speechStatus.playing, speechStatus.offset, state.bookId, state.chapterIndex) {
+        if (speechStatus.playing && SpeedSpeechCheckpointPolicy.acceptNarratorOffset(voiceMode, state.chapterText.length, speechStatus.offset)) {
+            viewModel.commitSpeechPosition(state.bookId, state.chapterIndex, speechStatus.offset)
+        }
+    }
+    val leaveSpeed: () -> Unit = {
+        // Commit speech before changing the route, while this session still owns the cursor.
+        if (voiceMode) speech.pause()
+        viewModel.speedPause()
+        onBack()
+    }
+    BackHandler(enabled = !isFullscreen && settingsPanel == SpeedSettingsPanel.NONE) { leaveSpeed() }
+
     val togglePlayback: () -> Unit = {
         if (voiceMode) {
             if (speechStatus.playing) speech.pause()
@@ -401,7 +414,7 @@ fun SpeedReaderScreen(
                             .background(background).padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        IconButton(onClick = leaveSpeed, modifier = Modifier.size(48.dp)) {
                             if (themedChrome) {
                                 FluxThemedIcon(FluxIconRole.BACK, Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Назад", modifier = Modifier.size(22.dp))

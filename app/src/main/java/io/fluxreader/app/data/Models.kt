@@ -62,6 +62,7 @@ data class BookRecord(
     val readerBlockCharOffset: Int = 0,
     val speedChapter: Int = 0,
     val speedOffset: Int = 0,
+    val readingPositionSource: ReadingPositionSource? = null,
     val pdfPage: Int = 0,
     val chapterCount: Int = 0,
     val lastOpenedAt: Long = 0L,

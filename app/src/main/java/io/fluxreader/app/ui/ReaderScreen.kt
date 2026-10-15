@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -146,6 +147,7 @@ import io.fluxreader.app.reader.ReaderNarrator
 import io.fluxreader.app.reader.SpeedReaderCursor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -240,7 +242,7 @@ fun ReaderScreen(
         }
     }
     narrator.onSegmentPosition = { blockIndex, charOffset ->
-        viewModel.saveReaderPosition(blockIndex, 0, charOffset)
+        viewModel.saveReaderPosition(state.bookId, state.chapterIndex, blockIndex, 0, charOffset)
     }
     narrator.onChapterComplete = {
         val next = state.chapterIndex + 1
@@ -264,6 +266,10 @@ fun ReaderScreen(
         (settings.fontSizeSp * settings.lineHeightMultiplier).sp.roundToPx().coerceAtLeast(1)
     }
     val measuredLineTops = remember(state.bookId, state.chapterIndex) { mutableStateMapOf<Int, IntArray>() }
+    val measuredLineStarts = remember(state.bookId, state.chapterIndex) { mutableStateMapOf<Int, IntArray>() }
+    var restoredScrollCharacter by remember(state.bookId, state.chapterIndex, state.initialBlockIndex, state.initialBlockCharOffset) { mutableStateOf(false) }
+    val needsScrollRestore = settings.navigationMode == ReaderNavigationMode.SCROLL &&
+        state.initialBlockCharOffset > 0 && state.initialBlockOffsetPx == 0 && !restoredScrollCharacter
     val chapterForNavigation = state.chapter
     val safeInitialBlock = chapterForNavigation?.let {
         state.initialBlockIndex.coerceIn(0, it.blocks.lastIndex.coerceAtLeast(0))
@@ -434,7 +440,9 @@ fun ReaderScreen(
         )
     }
 
-    fun currentReaderLocation(): ReaderPageLocation? = if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) {
+    fun currentReaderLocation(): ReaderPageLocation? = if (needsScrollRestore || viewportAnchorLocked) {
+        stableViewportAnchor
+    } else if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) {
         currentPreparedLocation()
     } else {
         listState?.let { currentList ->
@@ -442,8 +450,38 @@ fun ReaderScreen(
                 chapterIndex = state.chapterIndex,
                 blockIndex = currentList.firstVisibleItemIndex,
                 blockOffsetPx = currentList.firstVisibleItemScrollOffset,
-                blockCharOffset = 0,
+                blockCharOffset = ReaderViewportAnchor.scrollCharOffset(
+                    measuredLineTops[currentList.firstVisibleItemIndex], measuredLineStarts[currentList.firstVisibleItemIndex],
+                    currentList.firstVisibleItemScrollOffset,
+                ),
             )
+        }
+    }
+
+    fun commitCurrentReaderLocation() {
+        val location = currentReaderLocation() ?: stableViewportAnchor
+        viewModel.saveReaderPosition(state.bookId, state.chapterIndex, location.blockIndex, location.blockOffsetPx, location.blockCharOffset)
+        viewModel.flushReadingPosition()
+    }
+    val leaveReader: () -> Unit = { commitCurrentReaderLocation(); onBack() }
+    val openSpeedFromReader: () -> Unit = { commitCurrentReaderLocation(); onSpeed() }
+    BackHandler(enabled = chromeVisible && selectedText == null && overlay == ReaderOverlay.NONE) { leaveReader() }
+
+    LaunchedEffect(needsScrollRestore, measuredLineStarts[state.initialBlockIndex], listState) {
+        if (needsScrollRestore && listState != null) {
+            val starts = measuredLineStarts[state.initialBlockIndex]
+            val tops = measuredLineTops[state.initialBlockIndex]
+            if (starts != null && tops != null) {
+                val line = starts.indexOfLast { it <= state.initialBlockCharOffset }.coerceAtLeast(0)
+                listState.scrollToItem(state.initialBlockIndex, tops.getOrElse(line) { 0 })
+                restoredScrollCharacter = true
+            }
+        }
+    }
+
+    LaunchedEffect(listState) {
+        listState?.interactionSource?.interactions?.collect { interaction ->
+            if (interaction is DragInteraction.Start) viewportAnchorLocked = false
         }
     }
 
@@ -465,7 +503,7 @@ fun ReaderScreen(
         pendingViewportAnchor = anchor
         stableViewportAnchor = anchor
         viewportAnchorLocked = settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING
-        viewModel.saveReaderPosition(
+        viewModel.saveReaderPosition(state.bookId, state.chapterIndex,
             blockIndex = anchor.blockIndex,
             blockOffsetPx = anchor.blockOffsetPx,
             blockCharOffset = anchor.blockCharOffset,
@@ -499,7 +537,9 @@ fun ReaderScreen(
         settings.navigationMode,
     ) {
         if (pendingViewportAnchor == null) {
-            viewportAnchorLocked = false
+            // Merely displaying a page containing the spoken word must not round the shared
+            // cursor backwards to that page's first word. Release only on user navigation.
+            viewportAnchorLocked = state.initialBlockCharOffset > 0
             stableViewportAnchor = ReaderPageLocation(
                 chapterIndex = state.chapterIndex,
                 blockIndex = state.initialBlockIndex.coerceAtLeast(0),
@@ -524,7 +564,7 @@ fun ReaderScreen(
             if (pagination?.isComplete == true) {
                 currentPreparedLocation()?.let { location ->
                     stableViewportAnchor = location
-                    viewModel.saveReaderPosition(
+                    viewModel.saveReaderPosition(state.bookId, state.chapterIndex,
                         blockIndex = location.blockIndex,
                         blockOffsetPx = 0,
                         blockCharOffset = location.blockCharOffset,
@@ -536,7 +576,7 @@ fun ReaderScreen(
 
     fun previousPage() {
         selectedText = null
-        if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) viewportAnchorLocked = false
+        viewportAnchorLocked = false
         interactionTick++
         pageNavigationJob?.cancel()
 
@@ -577,7 +617,7 @@ fun ReaderScreen(
 
     fun nextPage() {
         selectedText = null
-        if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) viewportAnchorLocked = false
+        viewportAnchorLocked = false
         interactionTick++
         pageNavigationJob?.cancel()
 
@@ -947,7 +987,7 @@ fun ReaderScreen(
             val scrollState = listState ?: return@LaunchedEffect
             val blockIndex = ReaderProgressSeek.itemIndex(request.chapterFraction, state.chapter.blocks.size)
             scrollState.scrollToItem(blockIndex)
-            viewModel.saveReaderPosition(blockIndex, 0, 0)
+            viewModel.saveReaderPosition(state.bookId, state.chapterIndex, blockIndex, 0, 0)
         }
         pendingProgressSeek = null
     }
@@ -992,7 +1032,7 @@ fun ReaderScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = leaveReader) {
                         FluxThemedIcon(
                             FluxIconRole.BACK,
                             Icons.AutoMirrored.Filled.ArrowBack,
@@ -1071,7 +1111,7 @@ fun ReaderScreen(
                     history = pageHistory,
                     preparedPageIndex = if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) preparedPageIndex else null,
                     preparedPageCount = if (settings.navigationMode == ReaderNavigationMode.SCREEN_PAGING) preparedPagination?.takeIf { it.isComplete }?.pages?.size else null,
-                    onSpeed = onSpeed,
+                    onSpeed = openSpeedFromReader,
                     speedEnabled = state.bookId != null && state.error == null && !state.loading,
                     onPreviousPage = { previousPage() },
                     onNextPage = { nextPage() },
@@ -1135,6 +1175,8 @@ fun ReaderScreen(
                             onAnnotationTap = ::openAnnotationPopup,
                             viewportAnchor = pendingViewportAnchor ?: stableViewportAnchor.takeIf { viewportAnchorLocked },
                             measuredLineTops = measuredLineTops,
+                            measuredLineStarts = measuredLineStarts,
+                            canSaveScrollPosition = !needsScrollRestore && !viewportAnchorLocked,
                             preparedPagination = preparedPagination,
                             preparedPageIndex = preparedPageIndex,
                             paginationCache = preparedPaginationCache,
@@ -1365,6 +1407,8 @@ private fun ReaderContent(
     onAnnotationTap: ((ReaderAnnotation, Offset) -> Unit)?,
     viewportAnchor: ReaderPageLocation?,
     measuredLineTops: MutableMap<Int, IntArray>,
+    measuredLineStarts: MutableMap<Int, IntArray>,
+    canSaveScrollPosition: Boolean,
     preparedPagination: PreparedReaderPagination?,
     preparedPageIndex: Int,
     paginationCache: PreparedReaderPaginationCache,
@@ -1374,13 +1418,17 @@ private fun ReaderContent(
 
     // Scroll mode keeps the classic continuous position. Screen-paging mode persists a
     // block + character anchor. Chrome/fullscreen changes must not introduce their own snap.
-    LaunchedEffect(listState, state.chapterIndex, chapter.blocks.size, settings.navigationMode) {
-        if (settings.navigationMode != ReaderNavigationMode.SCROLL) return@LaunchedEffect
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+    LaunchedEffect(listState, state.chapterIndex, chapter.blocks.size, settings.navigationMode, canSaveScrollPosition) {
+        if (settings.navigationMode != ReaderNavigationMode.SCROLL || !canSaveScrollPosition) return@LaunchedEffect
+        snapshotFlow {
+            val index = listState.firstVisibleItemIndex
+            val offset = listState.firstVisibleItemScrollOffset
+            Triple(index, offset, ReaderViewportAnchor.scrollCharOffset(measuredLineTops[index], measuredLineStarts[index], offset))
+        }
             .distinctUntilChanged()
-            .collectLatest { (index, offset) ->
+            .collectLatest { (index, offset, charOffset) ->
                 delay(220)
-                viewModel.saveReaderPosition(index, offset, 0)
+                viewModel.saveReaderPosition(state.bookId, state.chapterIndex, index, offset, charOffset)
             }
     }
 
@@ -1476,6 +1524,8 @@ private fun ReaderContent(
                                     result.getLineTop(line).roundToInt().coerceAtLeast(0)
                                 }
                                 if (!measuredLineTops[index].contentEqualsSafe(tops)) measuredLineTops[index] = tops
+                                val starts = IntArray(result.lineCount) { result.getLineStart(it) }
+                                if (!measuredLineStarts[index].contentEqualsSafe(starts)) measuredLineStarts[index] = starts
                             },
                             continuation = false,
                             selectedWordSourceRange = selectedText

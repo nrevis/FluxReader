@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.94",
-  "versionCode": 20111,
+  "versionName": "0.2.0-alpha.95",
+  "versionCode": 20112,
   "line": "0.2-clean-rewrite",
-  "focus": "fullscreen-source-anchor-preservation"
+  "focus": "shared-reader-speed-voice-position"
 }

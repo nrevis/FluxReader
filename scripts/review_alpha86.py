@@ -19,7 +19,7 @@ checks = {
     "Reader bottom bar takes no voice callbacks": "onNarrationToggle" not in reader and "narrationPlaying:" not in reader,
     "Reader standard and experimental buttons contain no speech": '"Озвучить текст"' not in reader,
     "Reader overflow voice shortcut removed": 'text = { Text("Озвучивание") }' not in reader,
-    "Reader still links to speed": "onSpeed = onSpeed" in reader and 'contentDescription = "Скорочтение"' in reader,
+    "Reader still links to speed": "onSpeed = openSpeedFromReader" in reader and 'contentDescription = "Скорочтение"' in reader,
 }
 for name, ok in checks.items(): print(("PASS" if ok else "FAIL") + ": " + name)
 if not all(checks.values()): raise SystemExit(1)

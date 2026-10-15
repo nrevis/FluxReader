@@ -17,8 +17,9 @@ object ChapterSpeedOffset {
             val first = raw.indexOfFirst { !it.isWhitespace() }.let { if (it < 0) 0 else it }
             val lastExclusive = raw.indexOfLast { !it.isWhitespace() }.let { if (it < first) first else it + 1 }
             val trimmedLength = (lastExclusive - first).coerceAtLeast(0)
-            if (index == blockIndex) {
-                val local = (sourceCharOffset - first).coerceIn(0, trimmedLength)
+            if (index >= blockIndex) {
+                // A visible image/empty block resumes at the following text, not chapter end.
+                val local = if (index == blockIndex) (sourceCharOffset - first).coerceIn(0, trimmedLength) else 0
                 return offset + local
             }
             offset += trimmedLength + 2

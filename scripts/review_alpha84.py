@@ -9,7 +9,7 @@ checks={
     "no experimental double padding": "val experimentalChrome = settings.useWastelandDesign || settings.useCyberpunkDesign" in s,
     "narration no longer exposed as a reader button": "onNarrationToggle" not in s,
     "narration menu removed": 'text = { Text("Озвучивание") }' not in s,
-    "speed remains reader entry": "onSpeed = onSpeed" in s,
+    "speed remains reader entry": "onSpeed = openSpeedFromReader" in s,
     "not dedicated header button": "topBar" in s and "bottomBar" in s,
 }
 for name, ok in checks.items():

@@ -10,7 +10,7 @@ base=root/'app/src/main/java/io/fluxreader/app'
 read=lambda p:p.read_text()
 w=read(ui/'WastelandUi.kt'); c=read(ui/'ExperimentalChrome.kt')
 a=read(base/'AppViewModel.kt'); lib=read(base/'data/LibraryRepository.kt')
-policy=read(base/'SpeedResumePolicy.kt'); speed=read(ui/'SpeedReaderScreen.kt')
+policy=read(base/'data/ReadingPositionPolicy.kt'); speed=read(ui/'SpeedReaderScreen.kt')
 checks={
  'No fullscreen frame early return in Wasteland': 'if (immersive) {\n        Box(' not in w,
  'No fullscreen frame early return in Cyberpunk': 'if (immersive) {\n        Box(' not in c,
@@ -19,7 +19,7 @@ checks={
  'No side bezel in immersive Wasteland': '.padding(horizontal = if (immersive) 0.dp else 10.dp' in w,
  'No side bezel in immersive Cyberpunk': '.padding(horizontal = if (immersive) 0.dp else 8.dp' in c,
  'Explicit selected-word entry preserved': 'startSpeed(\n            bookId = bookId,' in a and 'preferredOffset = chapterOffset.coerceAtLeast(0)' in a,
- 'Saved speed checkpoint preferred': 'SpeedResumePolicy.choose(book.speedChapter, book.speedOffset, preferredChapter)' in a,
+ 'Latest active checkpoint preferred': 'ReadingPositionPolicy.chapter(book)' in a and 'resumeFromReader = source == ReadingPositionSource.READER' in a,
  'Saving speed checkpoint on pause': 'libraryRepository.flushPendingPositions()' in a,
  'Checkpoint flush off UI thread': 'persistJob = ioScope.launch { saveLibrary(snapshot) }' in lib,
  'Checkpoint policy does not depend on Android': 'import android' not in policy,

@@ -30,9 +30,9 @@ def judge(ui: str, tts: str, policy: str, vm: str, library: str):
         'Narrator checks that the TTS session was active': bool(narrator_pause) and 'commitOnPause(wasSpeaking, wasPending)' in narrator_pause.group(1),
         'Idle TTS pause cannot fire settled-position callback': 'if (SpeedSpeechCheckpointPolicy.commitOnPause(wasSpeaking, wasPending))' in tts,
         'Pure policy excludes idle voice': 'wasSpeaking || wasPending' in policy and 'voiceMode && textLength > 0' in policy,
-        'StartSpeed preserves persisted offset': 'val startOffset = preferredOffset ?: savedOrChapterStart' in vm,
+        'StartSpeed preserves persisted offset': 'val startOffset = if (resumeFromReader' in vm and 'else savedOrChapterStart' in vm,
         'Speed checkpoint is saved on pause': 'libraryRepository.flushPendingPositions()' in vm,
-        'Speed checkpoint uses a separate stored offset': 'speedOffset = offset.coerceAtLeast(0)' in library,
+        'Speed checkpoint retains its text offset': 'ReadingPositionPolicy.speedCheckpoint(book, chapter, offset)' in library,
         'No TTS reset at chapter entry': 'LaunchedEffect(state.bookId, state.chapterIndex) { speech.pause()' not in ui,
         'Fresh speed session clears old auto-rewind timer': bool(re.search(r'private fun startSpeed\(.*?speedPausedAtRealtimeMs = 0L.*?_route.value = AppRoute.SPEED', vm, re.S)),
     }
