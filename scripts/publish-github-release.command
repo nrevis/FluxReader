@@ -42,7 +42,7 @@ fi
 
 echo "Публикуем $TAG в https://github.com/nrevis/FluxReader/releases"
 echo "SHA-256: $SHA"
-NOTES="RELEASE-NOTES-$VERSION.md"
+NOTES="_archive/release-notes/RELEASE-NOTES-$VERSION.md"
 if [[ -f "$NOTES" ]]; then
   gh release create "$TAG" "$APK" "$CHECKSUM" --repo nrevis/FluxReader \
     --title "Flux Reader $VERSION" --notes-file "$NOTES" --prerelease
