@@ -147,6 +147,12 @@ data class ReaderSettings(
     val fullscreenTransitionEnabled: Boolean = false,
     val fullscreenTransitionDurationMs: Int = 220,
     val speedMode: SpeedMode = SpeedMode.RSVP,
+    // All dialogue features are experimental and disabled until the main switch is enabled.
+    val speedDialogueEnabled: Boolean = false,
+    val speedDialogueNames: Boolean = true,
+    val speedDialogueShortReplies: Boolean = true,
+    val speedDialoguePauseEnabled: Boolean = true,
+    val speedDialoguePauseMs: Int = 220,
     val speedWpm: Int = 350,
     val speedWordsPerFixation: Int = 1,
     val speedPacingMode: SpeedPacingMode = SpeedPacingMode.SMART,

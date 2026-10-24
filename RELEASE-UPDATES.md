@@ -9,10 +9,10 @@
 
 ## Формат релиза
 
-- Тег: `v0.2.0-alpha.95` (или другая версия, совпадающая с `VERSION.txt`).
+- Тег: `v0.2.0-alpha.96` (или другая версия, совпадающая с `VERSION.txt`).
 - GitHub Release должен быть **опубликован**, не draft.
-- Asset: `FluxReader-0.2.0-alpha.95-release.apk` (не debug APK).
-- Asset: `FluxReader-0.2.0-alpha.95-release.apk.sha256`, содержащий SHA-256 и имя APK.
+- Asset: `FluxReader-0.2.0-alpha.96-release.apk` (не debug APK).
+- Asset: `FluxReader-0.2.0-alpha.96-release.apk.sha256`, содержащий SHA-256 и имя APK.
   Если GitHub API сообщает `assets[].digest=sha256:<hex>`, приложение может
   использовать его вместо отдельного файла.
 - `versionCode` в APK должен быть **строго выше** установленного.
@@ -22,7 +22,7 @@
 ## Сборка и ручная публикация с Mac
 
 ```bash
-cd ~/Downloads/FluxReader-0.2.0-alpha.95-clean
+cd ~/Downloads/FluxReader-0.2.0-alpha.96-clean
 chmod +x gradlew scripts/*.command
 ./gradlew :app:testDebugUnitTest :app:assembleRelease
 scripts/build-release.command

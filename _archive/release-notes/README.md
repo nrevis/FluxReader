@@ -6,6 +6,7 @@
 
 ## Версии — от новых к старым
 
+- [0.2.0-alpha.96](RELEASE-NOTES-0.2.0-alpha.96.md)
 - [0.2.0-alpha.95](RELEASE-NOTES-0.2.0-alpha.95.md)
 - [0.2.0-alpha.94](RELEASE-NOTES-0.2.0-alpha.94.md)
 - [0.2.0-alpha.93](RELEASE-NOTES-0.2.0-alpha.93.md)

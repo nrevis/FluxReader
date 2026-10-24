@@ -32,6 +32,9 @@ python3 scripts/check_compose_symbols.py
 python3 scripts/test_compose_symbols.py
 python3 scripts/test_kotlin_import_checker.py
 
+echo "▶ Experimental dialogue parser / zero-skip RSVP"
+bash scripts/test_dialogues.command
+
 echo "▶ Version / clean-line integrity"
 bash scripts/verify-version.command
 python3 scripts/test_version_preflight.py
@@ -575,7 +578,7 @@ grep -q 'suspend fun speedDocument' "$CONTENT_REPO"
 grep -q 'SpeedMediaFrame' "$SPEED_SCREEN"
 grep -q 'SpeedChapterIntro' "$SPEED_SCREEN"
 grep -q 'SpeedPausePreview' "$SPEED_SCREEN"
-grep -q 'SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED }' "$SPEED_SCREEN"
+grep -q 'SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE }' "$SPEED_SCREEN"
 grep -q 'speedImagePauseMsV10' "$SETTINGS_REPO"
 grep -q 'speedVolumeKeysEnabledV10' "$SETTINGS_REPO"
 grep -Fq 'valueRange = 100f..3000f' "$SPEED_SCREEN"
@@ -914,7 +917,7 @@ grep -q 'panel = ReaderSettingsPanel.MAIN' "$READER_UI"
 }
 grep -q 'BackHandler(enabled = settingsPanel != SpeedSettingsPanel.NONE)' "$SPEED_UI"
 grep -q 'readerSpeedReaderLibrarySequenceIsStable' app/src/test/java/io/fluxreader/app/AppBackDestinationPolicyTest.kt
-grep -q 'SpeedSettingsPanel.VOICE,' "$SPEED_UI" && grep -q 'SpeedSettingsPanel.ADVANCED -> SpeedSettingsPanel.HUB' "$SPEED_UI"
+grep -q 'SpeedSettingsPanel.VOICE,' "$SPEED_UI" && grep -q 'SpeedSettingsPanel.DIALOGUE -> SpeedSettingsPanel.HUB' "$SPEED_UI"
 if grep -q 'private fun SpeedSheetHeader' "$SPEED_UI"; then
   echo "❌ alpha.42: duplicate SpeedSheetHeader returned"
   exit 66

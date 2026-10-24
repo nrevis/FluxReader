@@ -398,6 +398,8 @@ private fun SpeedSettings(settings: ReaderSettings, viewModel: AppViewModel) {
         "После долгой паузы возвращается к началу смыслового фрагмента.",
         settings.speedAutoRewindAfterPause,
     ) { enabled -> viewModel.updateSettings { it.copy(speedAutoRewindAfterPause = enabled) } }
+    Text("Экспериментальные функции", style = MaterialTheme.typography.titleMedium)
+    SpeedDialogueSettings(settings, viewModel::updateSettings)
     Text("Расширенные визуальные настройки доступны кнопкой настройки прямо в Speed Reader.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

@@ -1,2 +1,2 @@
-versionName=0.2.0-alpha.95
-versionCode=20112
+versionName=0.2.0-alpha.96
+versionCode=20113

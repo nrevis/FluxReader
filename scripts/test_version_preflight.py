@@ -40,4 +40,23 @@ with tempfile.TemporaryDirectory(prefix='flux-version-test-') as tmp:
         verify(False)
         target.write_text(content)
         verify(True)
-print('✅ Version preflight: 1 valid + 5 injected mismatch scenarios rejected')
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=temp, check=True, capture_output=True, text=True)
+    git('init', '-q')
+    git('add', 'VERSION.txt')
+    git('-c', 'user.name=Version Test', '-c', 'user.email=version-test@example.invalid',
+        '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Release metadata fixture')
+    # Matching metadata must still be rejected when a newer release already exists.
+    alpha = int(VERSION.rsplit('.', 1)[1])
+    future_tag = f'v0.2.0-alpha.{alpha + 1}'
+    git('tag', future_tag)
+    verify(False)
+    git('tag', '-d', future_tag)
+    # A new version name without an increased Android code is also invalid.
+    previous_tag = f'v0.2.0-alpha.{alpha - 1}'
+    git('tag', previous_tag)
+    verify(False)
+    git('tag', '-d', previous_tag)
+    git('tag', f'v{VERSION}')
+    verify(True)
+print('✅ Version preflight: metadata mismatches, stale versions and reused Android codes rejected')

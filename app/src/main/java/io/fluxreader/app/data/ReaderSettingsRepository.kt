@@ -64,6 +64,11 @@ class ReaderSettingsRepository(context: Context) {
             .putBoolean("fullscreenTransitionEnabledV13", next.fullscreenTransitionEnabled)
             .putInt("fullscreenTransitionDurationMsV13", next.fullscreenTransitionDurationMs)
             .putString("speedModeV2", next.speedMode.name)
+            .putBoolean("speedDialogueEnabledV1", next.speedDialogueEnabled)
+            .putBoolean("speedDialogueNamesV1", next.speedDialogueNames)
+            .putBoolean("speedDialogueShortRepliesV1", next.speedDialogueShortReplies)
+            .putBoolean("speedDialoguePauseEnabledV1", next.speedDialoguePauseEnabled)
+            .putInt("speedDialoguePauseMsV1", next.speedDialoguePauseMs)
             .putInt("speedWpm", next.speedWpm)
             .putInt("speedWordsPerFixation", next.speedWordsPerFixation)
             .putString("speedPacingModeV5", next.speedPacingMode.name)
@@ -213,6 +218,11 @@ class ReaderSettingsRepository(context: Context) {
                 fullscreenTransitionEnabled = prefs.getBoolean("fullscreenTransitionEnabledV13", false),
                 fullscreenTransitionDurationMs = prefs.getInt("fullscreenTransitionDurationMsV13", 220),
                 speedMode = speedMode,
+                speedDialogueEnabled = prefs.getBoolean("speedDialogueEnabledV1", false),
+                speedDialogueNames = prefs.getBoolean("speedDialogueNamesV1", true),
+                speedDialogueShortReplies = prefs.getBoolean("speedDialogueShortRepliesV1", true),
+                speedDialoguePauseEnabled = prefs.getBoolean("speedDialoguePauseEnabledV1", true),
+                speedDialoguePauseMs = prefs.getInt("speedDialoguePauseMsV1", 220),
                 speedWpm = prefs.getInt("speedWpm", 350),
                 speedWordsPerFixation = prefs.getInt("speedWordsPerFixation", prefs.getInt("phraseWords", 1)),
                 speedPacingMode = speedPacingMode,
@@ -307,6 +317,7 @@ class ReaderSettingsRepository(context: Context) {
         chromeAutoHideSeconds = value.chromeAutoHideSeconds.coerceIn(0, 15),
         pageTurnDurationMs = value.pageTurnDurationMs.coerceIn(80, 700),
         fullscreenTransitionDurationMs = value.fullscreenTransitionDurationMs.coerceIn(100, 600),
+        speedDialoguePauseMs = value.speedDialoguePauseMs.coerceIn(0, 500),
         speedWpm = value.speedWpm.coerceIn(100, 3000),
         speedWordsPerFixation = value.speedWordsPerFixation.coerceIn(1, 7),
         speedSentencePauseMs = value.speedSentencePauseMs.coerceIn(0, 700),

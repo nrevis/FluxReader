@@ -6,6 +6,7 @@
 
 ## Версии — от новых к старым
 
+- [0.2.0-alpha.96](VALIDATION-0.2.0-alpha.96.txt)
 - [0.2.0-alpha.64](VALIDATION-0.2.0-alpha.64.txt)
 - [0.2.0-alpha.62](VALIDATION-0.2.0-alpha.62.txt)
 - [0.2.0-alpha.61](VALIDATION-0.2.0-alpha.61.txt)

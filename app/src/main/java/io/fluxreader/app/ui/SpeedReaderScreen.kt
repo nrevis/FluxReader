@@ -102,6 +102,7 @@ import io.fluxreader.app.data.SpeedLowerSegmentMode
 import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.data.SpeedPacingMode
 import io.fluxreader.app.data.SpeedProgressMode
+import io.fluxreader.app.reader.SpeedDialogueAnalyzer
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SpeedSpeechCheckpointPolicy
 import io.fluxreader.app.reader.SpeedSpeechNarrator
@@ -112,7 +113,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED }
+private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,7 +171,20 @@ fun SpeedReaderScreen(
     val displayState = if (voiceMode && visualChunk != null) {
         state.copy(chunk = visualChunk, playing = speechStatus.playing)
     } else state
-    val displaySettings = if (voiceMode) settings.copy(speedMode = SpeedMode.RSVP) else settings
+    val showShortDialogue = !voiceMode && settings.speedDialogueEnabled && settings.speedDialogueShortReplies &&
+        settings.speedMode == SpeedMode.RSVP && (displayState.chunk?.tokens?.size ?: 0) > 1
+    val displaySettings = when {
+        voiceMode -> settings.copy(speedMode = SpeedMode.RSVP)
+        showShortDialogue -> settings.copy(
+            speedMode = SpeedMode.PHRASE,
+            speedFontSizeSp = (settings.speedFontSizeSp * 0.66f).coerceIn(24f, 44f),
+            speedFixedFontSize = false,
+            speedAutoFitText = true,
+            speedMinFontSizeSp = 20f,
+            speedMaxLines = 2,
+        )
+        else -> settings
+    }
 
     // TTS callbacks are valid checkpoints ONLY during an explicitly enabled voice session.
     // A freshly-created narrator starts at offset 0: applying that offset while loading
@@ -307,6 +321,10 @@ fun SpeedReaderScreen(
         settings.speedGradualAcceleration,
         settings.speedAccelerationSeconds,
         settings.speedAccelerationStartPercent,
+        settings.speedDialogueEnabled,
+        settings.speedDialoguePauseEnabled,
+        settings.speedDialoguePauseMs,
+        state.chapterText,
     ) {
         val chunk = state.chunk
         if (state.playing && chunk != null && !state.loading && state.error == null) {
@@ -318,6 +336,10 @@ fun SpeedReaderScreen(
                 startPercent = settings.speedAccelerationStartPercent,
                 durationSeconds = settings.speedAccelerationSeconds,
             )
+            val dialoguePause = if (settings.speedDialogueEnabled && settings.speedDialoguePauseEnabled &&
+                SpeedDialogueAnalyzer.isReplyStart(state.chapterText, chunk.startOffset)) {
+                settings.speedDialoguePauseMs.toLong()
+            } else 0L
             delay(
                 SpeedReaderCursor.delayMillis(
                     wpm = effectiveWpm,
@@ -332,7 +354,7 @@ fun SpeedReaderScreen(
                     adaptiveSentencePause = settings.speedAdaptiveSentencePause,
                     sentenceLengthBonusMs = settings.speedSentenceLengthBonusMs,
                     longWordSlowdownPercent = settings.speedLongWordSlowdownPercent,
-                )
+                ) + dialoguePause
             )
             viewModel.speedAdvance()
         }
@@ -513,6 +535,12 @@ fun SpeedReaderScreen(
             onBack = { settingsPanel = SpeedSettingsPanel.HUB },
             onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
         )
+        SpeedSettingsPanel.DIALOGUE -> SpeedDialogueSheet(
+            settings = settings,
+            viewModel = viewModel,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB },
+            onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
+        )
         SpeedSettingsPanel.VOICE -> SpeedVoiceSettingsSheet(
             settings = settings,
             voices = speechStatus.voices,
@@ -541,7 +569,8 @@ fun SpeedReaderScreen(
             SpeedSettingsPanel.BEHAVIOR,
             SpeedSettingsPanel.VOICE,
             SpeedSettingsPanel.EFFECTS,
-            SpeedSettingsPanel.ADVANCED -> SpeedSettingsPanel.HUB
+            SpeedSettingsPanel.ADVANCED,
+            SpeedSettingsPanel.DIALOGUE -> SpeedSettingsPanel.HUB
             SpeedSettingsPanel.NONE -> SpeedSettingsPanel.NONE
         }
     }
@@ -615,7 +644,7 @@ private fun SpeedViewport(
         val pausePreviewReservePx = if (settings.speedShowPausePreview) with(density) {
             (if (immersiveMode) 110.dp else 140.dp).toPx()
         } else 0f
-        val topClearancePx = with(density) { 24.dp.toPx() }
+        val topClearancePx = with(density) { (if (settings.speedDialogueEnabled) 84.dp else 24.dp).toPx() }
         val lowerSegmentReservePx = persistentHeightPx + pauseContextHeightPx + with(density) {
             (if (persistentHeightPx > 0f || pauseContextHeightPx > 0f) 22.dp else 0.dp).toPx()
         }
@@ -699,6 +728,34 @@ private fun SpeedViewport(
             }
             state.chunk != null -> {
                 val chunk = state.chunk
+                val dialogue = remember(state.chapterText, chunk.startOffset, settings.speedDialogueEnabled) {
+                    if (settings.speedDialogueEnabled) SpeedDialogueAnalyzer.at(state.chapterText, chunk.startOffset) else null
+                }
+                if (dialogue != null) {
+                    val speakerPalette = listOf(
+                        Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A),
+                        Color(0xFFA8D9A0), Color(0xFFEBADD4),
+                    )
+                    val speakerColor = dialogue.speaker?.let { name ->
+                        speakerPalette[(name.lowercase().hashCode() and Int.MAX_VALUE) % speakerPalette.size]
+                    } ?: focusColor
+                    // Absolute overlay: does not resize or shift the fixed ORP fixation rail.
+                    Surface(
+                        modifier = Modifier.align(Alignment.Center).offset(y = yOffset - mainHalfHeightDp - 38.dp),
+                        color = speakerColor.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, speakerColor.copy(alpha = 0.32f)),
+                    ) {
+                        Text(
+                            text = if (settings.speedDialogueNames) dialogue.speaker ?: "Прямая речь" else "Диалог",
+                            color = speakerColor,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        )
+                    }
+                }
                 SpeedChunkText(
                     state = state,
                     settings = settings,
@@ -1683,11 +1740,33 @@ private fun SpeedSettingsHub(
             )
             SpeedSettingsNavRow("Отображение", "Шрифт, направляющая, контекст и прогресс") { onOpen(SpeedSettingsPanel.DISPLAY) }
             SpeedSettingsNavRow("Поведение", "Тапы, пауза, картинки и начало главы") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
+            SpeedSettingsNavRow("Эксперимент: диалоги", "Распознавание персонажей, короткие реплики, паузы") { onOpen(SpeedSettingsPanel.DIALOGUE) }
             SpeedSettingsNavRow("Голос и озвучка", "Офлайн-голоса, скорость, высота тона") { onOpen(SpeedSettingsPanel.VOICE) }
             if (settings.useWastelandDesign || settings.useCyberpunkDesign) {
                 SpeedSettingsNavRow("Экранные эффекты", "CRT, развёртка, свечение, шум") { onOpen(SpeedSettingsPanel.EFFECTS) }
             }
             SpeedSettingsNavRow("Расширенные", "RSVP, точные тайминги, геометрия и цвета") { onOpen(SpeedSettingsPanel.ADVANCED) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedDialogueSheet(
+    settings: ReaderSettings,
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ModalSheetHeader("Эксперимент: диалоги", onBack = onBack, onClose = onDismiss)
+            SpeedDialogueSettings(settings, viewModel::updateSettings)
         }
     }
 }
