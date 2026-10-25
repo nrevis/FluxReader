@@ -34,6 +34,9 @@ import io.fluxreader.app.reader.DialogueCorrection
 import io.fluxreader.app.reader.DialogueCorrectionStore
 import io.fluxreader.app.reader.DialogueReply
 import io.fluxreader.app.reader.DialogueReplyLocator
+import io.fluxreader.app.reader.BookSpeakerColors
+import io.fluxreader.app.reader.BookSpeakerColorStore
+import io.fluxreader.app.reader.SpeakerTint
 import io.fluxreader.app.reader.BookContentRepository
 import io.fluxreader.app.reader.BookDialogueRepository
 import io.fluxreader.app.reader.ChapterDialogueIndex
@@ -44,6 +47,7 @@ import io.fluxreader.app.reader.SpeedChunk
 import io.fluxreader.app.reader.SpeedHeadingCue
 import io.fluxreader.app.reader.SpeedMediaCue
 import io.fluxreader.app.reader.SpeedDialoguePlayback
+import io.fluxreader.app.reader.SpeedDialogueAnalyzer
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SearchEngine
 import kotlinx.coroutines.CancellationException
@@ -124,6 +128,7 @@ data class SpeedUiState(
     val chapterText: String = "",
     val dialogueIndex: ChapterDialogueIndex? = null,
     val dialogueCorrections: List<DialogueCorrection> = emptyList(),
+    val speakerColors: BookSpeakerColors = BookSpeakerColors(),
     val dialogueAnalysisStatus: String? = null,
     val chunk: SpeedChunk? = null,
     val mediaCues: List<SpeedMediaCue> = emptyList(),
@@ -147,6 +152,8 @@ private data class LoadedSpeedChapter(
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val dialogueCorrectionStore = DialogueCorrectionStore(File(application.filesDir, "dialogue-corrections-v1"))
+    private val speakerColorStore = BookSpeakerColorStore(File(application.filesDir, "speaker-colors-v1"))
+    private val speakerColorEdits = Mutex()
     private val updateManager = GitHubUpdateManager(application, viewModelScope)
     val githubUpdates = updateManager.state
     fun checkForUpdates() = updateManager.check()
@@ -1452,6 +1459,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             libraryRepository.touch(book.id)
 
             val corrections = withContext(Dispatchers.IO) { dialogueCorrectionStore.read(bookId, loaded.chapterIndex, loaded.text) }
+            val colors = loadSpeakerColors(bookId, loaded.text, corrections)
             if (_route.value == AppRoute.SPEED && _speed.value.bookId == bookId) {
                 _speed.value = SpeedUiState(
                     bookId = bookId,
@@ -1459,6 +1467,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
                     dialogueCorrections = corrections,
+                    speakerColors = colors,
                     dialogueIndex = null,
                     dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
@@ -1714,9 +1723,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val corrections = withContext(Dispatchers.IO) {
                 dialogueCorrectionStore.update(bookId, captured.chapterIndex, captured.chapterText, reply, speaker, automatic)
             }
+            val colors = withContext(Dispatchers.IO) { speakerColorStore.ensure(bookId, corrections.mapNotNull { it.speaker }) }
             val latest = _speed.value
             if (latest.bookId == bookId && latest.chapterIndex == captured.chapterIndex && latest.chapterText == captured.chapterText) {
-                _speed.value = latest.copy(dialogueCorrections = corrections)
+                _speed.value = latest.copy(dialogueCorrections = corrections,
+                    speakerColors = if (colors.revision >= latest.speakerColors.revision) colors else latest.speakerColors)
+            }
+        }
+    }
+
+    fun setSpeakerColor(name: String, tint: SpeakerTint?) {
+        val bookId = _speed.value.bookId ?: return
+        speedPause()
+        launchHandled(onError = { _message.value = it.userMessage("Не удалось сохранить цвет имени") }) {
+            speakerColorEdits.withLock {
+                val colors = withContext(Dispatchers.IO) { speakerColorStore.set(bookId, name, tint) }
+                val latest = _speed.value
+                if (latest.bookId == bookId && colors.revision >= latest.speakerColors.revision) {
+                    _speed.value = latest.copy(speakerColors = colors)
+                }
+            }
+        }
+    }
+
+    private suspend fun loadSpeakerColors(bookId: String, text: String, corrections: List<DialogueCorrection>) = withContext(Dispatchers.IO) {
+        val context = currentCoroutineContext()
+        val names = if (settings.value.speedDialogueEnabled) SpeedDialogueAnalyzer.spans(text) { context.ensureActive() }.mapNotNull { it.speaker } else emptyList()
+        speakerColorStore.ensure(bookId, names + corrections.mapNotNull { it.speaker })
+    }
+
+    private fun prepareSpeakerColors() {
+        val captured = _speed.value
+        val bookId = captured.bookId ?: return
+        if (captured.loading || captured.chapterText.isBlank()) return
+        launchHandled(onError = { _message.value = it.userMessage("Не удалось подготовить цвета имён") }) {
+            val colors = loadSpeakerColors(bookId, captured.chapterText, captured.dialogueCorrections)
+            val latest = _speed.value
+            if (latest.bookId == bookId && colors.revision >= latest.speakerColors.revision) {
+                _speed.value = latest.copy(speakerColors = colors)
             }
         }
     }
@@ -1758,6 +1802,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val loaded = findReadableSpeedChapter(book, outline, startChapter, offset, words)
                 ?: error("В следующих главах нет текста")
             val corrections = withContext(Dispatchers.IO) { dialogueCorrectionStore.read(book.id, loaded.chapterIndex, loaded.text) }
+            val colors = loadSpeakerColors(book.id, loaded.text, corrections)
             val latest = _speed.value
             if (_route.value == AppRoute.SPEED && latest.bookId == book.id) {
                 val history = historyOverride ?: (latest.history + listOfNotNull(appendHistory)).takeLast(256)
@@ -1766,6 +1811,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
                     dialogueCorrections = corrections,
+                    speakerColors = if (colors.revision >= latest.speakerColors.revision) colors else latest.speakerColors,
                     dialogueIndex = null,
                     dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
@@ -1992,6 +2038,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val before = settings.value
         settingsRepository.update(transform)
         val after = settings.value
+        if (_route.value == AppRoute.SPEED && !before.speedDialogueEnabled && after.speedDialogueEnabled) prepareSpeakerColors()
 
         if (_route.value == AppRoute.SPEED &&
             (before.speedMode != after.speedMode ||
@@ -2046,12 +2093,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 bookDialogueRepository.analyze(book, outline, state.chapterIndex,
                     onChapter = { chapter, index ->
+                        val colors = speakerColorStore.ensure(book.id, index.entries.mapNotNull { it.span.speaker })
                         withContext(Dispatchers.Main.immediate) {
                             val latest = _speed.value
                             if (generation == bookDialogueGeneration && _route.value == AppRoute.SPEED &&
-                                latest.bookId == book.id && !latest.loading && latest.chapterIndex == chapter &&
-                                index.textFingerprint == displayedFingerprint) {
-                                _speed.value = latest.copy(dialogueIndex = index)
+                                latest.bookId == book.id && !latest.loading) {
+                                _speed.value = latest.copy(dialogueIndex = if (latest.chapterIndex == chapter &&
+                                    index.textFingerprint == displayedFingerprint) index else latest.dialogueIndex,
+                                    speakerColors = if (colors.revision >= latest.speakerColors.revision) colors else latest.speakerColors)
                             }
                         }
                     },

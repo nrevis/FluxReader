@@ -40,6 +40,9 @@ import io.fluxreader.app.data.ReaderSettings
 import io.fluxreader.app.data.SpeedSpeakerColor
 import io.fluxreader.app.data.SpeedSpeakerPosition
 import io.fluxreader.app.data.SpeedSpeakerStyle
+import io.fluxreader.app.reader.SpeakerColorEntry
+import io.fluxreader.app.reader.SpeakerTint
+import io.fluxreader.app.reader.speakerColorKey
 
 /** Used by the actual reader and its live settings preview. Names always keep natural case. */
 @Composable
@@ -51,25 +54,23 @@ internal fun SpeedSpeakerLabel(
     modifier: Modifier = Modifier,
     namedSpeaker: Boolean = true,
     onClick: (() -> Unit)? = null,
+    characterColor: SpeakerColorEntry? = null,
 ) {
     val themed = LocalFluxThemeMode.current.isExperimentalChrome
     val themePalette = LocalExperimentalColors.current
     val light = listOf(Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A), Color(0xFFA8D9A0), Color(0xFFEBADD4))
     val dark = listOf(Color(0xFF5935A2), Color(0xFF00686A), Color(0xFF8B4200), Color(0xFF31652C), Color(0xFF92396D))
     val palette = if (background.luminance() < .35f) light else dark
-    val chosen = when (if (namedSpeaker) settings.speedSpeakerColor else SpeedSpeakerColor.THEME) {
-        SpeedSpeakerColor.CHARACTER -> {
-            val characterPalette = if (themed) listOf(themePalette.text, themePalette.accent, themePalette.secondary) else palette
-            characterPalette[(speaker.lowercase().hashCode() and Int.MAX_VALUE) % characterPalette.size]
-        }
-        SpeedSpeakerColor.THEME -> accent
+    val individual = speakerNameTint(speaker, namedSpeaker, settings.speedSpeakerColor, characterColor)
+    val chosen = individual?.let { speakerTintColor(it, background) } ?: when (if (namedSpeaker) settings.speedSpeakerColor else SpeedSpeakerColor.THEME) {
+        SpeedSpeakerColor.THEME, SpeedSpeakerColor.CHARACTER -> accent
         SpeedSpeakerColor.BLUE -> if (background.luminance() < .35f) Color(0xFF9CCAFF) else Color(0xFF1D5599)
         SpeedSpeakerColor.GREEN -> palette[3]
         SpeedSpeakerColor.AMBER -> palette[2]
         SpeedSpeakerColor.ROSE -> palette[4]
         SpeedSpeakerColor.VIOLET -> palette[0]
     }
-    val frameColor = if (themed) themePalette.accent else chosen
+    val frameColor = if (themed && individual == null) themePalette.accent else chosen
     val fill = if (themed) frameColor.copy(alpha = settings.speedSpeakerBackgroundAlpha * .5f).compositeOver(themePalette.panel)
         else chosen.copy(alpha = settings.speedSpeakerBackgroundAlpha).compositeOver(background)
     val text = speakerLabelTextColor(chosen, background, fill, settings.speedSpeakerStyle)
@@ -96,6 +97,31 @@ internal fun SpeedSpeakerLabel(
                 bottom = if (bubble && above) 8.dp else 0.dp)) { label() }
         }
     }
+}
+
+internal fun speakerNameTint(name: String, namedSpeaker: Boolean, mode: SpeedSpeakerColor, entry: SpeakerColorEntry?): SpeakerTint? {
+    if (!namedSpeaker) return null
+    return entry?.custom ?: if (mode == SpeedSpeakerColor.CHARACTER) entry?.automatic
+        ?: SpeakerTint.entries[(speakerColorKey(name).hashCode() and Int.MAX_VALUE) % SpeakerTint.entries.size] else null
+}
+
+internal fun speakerTintColor(tint: SpeakerTint, background: Color): Color {
+    val dark = background.luminance() < .35f
+    return Color(when (tint) {
+        SpeakerTint.BLUE -> if (dark) 0xFF9CCAFF else 0xFF1D5599
+        SpeakerTint.CYAN -> if (dark) 0xFF75D0D1 else 0xFF00686A
+        SpeakerTint.GREEN -> if (dark) 0xFFA8D9A0 else 0xFF31652C
+        SpeakerTint.LIME -> if (dark) 0xFFD0E58A else 0xFF486000
+        SpeakerTint.AMBER -> if (dark) 0xFFFFC18A else 0xFF8B5A00
+        SpeakerTint.ORANGE -> if (dark) 0xFFFFA486 else 0xFF9C3E14
+        SpeakerTint.ROSE -> if (dark) 0xFFEBADD4 else 0xFF92396D
+        SpeakerTint.VIOLET -> if (dark) 0xFFB7A3FA else 0xFF5935A2
+    })
+}
+
+internal val SpeakerTint.label: String get() = when (this) {
+    SpeakerTint.BLUE -> "Синий"; SpeakerTint.CYAN -> "Бирюзовый"; SpeakerTint.GREEN -> "Зелёный"; SpeakerTint.LIME -> "Лаймовый"
+    SpeakerTint.AMBER -> "Янтарный"; SpeakerTint.ORANGE -> "Оранжевый"; SpeakerTint.ROSE -> "Розовый"; SpeakerTint.VIOLET -> "Фиолетовый"
 }
 
 @Composable

@@ -43,12 +43,13 @@ class VisualReviewActivity : ComponentActivity() {
             experimentalFrameStyle = if (theme == "cyberpunk") ReaderThemeMode.CYBERPUNK_NEON else ReaderThemeMode.WASTELAND_TERMINAL,
             experimentalPalette = null,
             experimentalCrtEnabled = intent.getBooleanExtra("effects", false),
-            speedDialogueEnabled = true,
+            speedDialogueEnabled = intent.getBooleanExtra("dialogues", true),
             speedDialogueBookAnalysis = intent.getBooleanExtra("bookAnalysis", false),
             speedSpeakerColor = when (intent.getStringExtra("speakerColor")) {
                 "theme" -> SpeedSpeakerColor.THEME
                 "character" -> SpeedSpeakerColor.CHARACTER
                 "blue" -> SpeedSpeakerColor.BLUE
+                "auto" -> SpeedSpeakerColor.CHARACTER
                 else -> it.speedSpeakerColor
             },
             speedSpeakerStyle = when (intent.getStringExtra("label")) { "text" -> SpeedSpeakerStyle.TEXT; "chip" -> SpeedSpeakerStyle.CHIP; else -> SpeedSpeakerStyle.BUBBLE },
@@ -120,7 +121,11 @@ class VisualReviewActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             val localBook = intent.getStringExtra("bookFile")?.takeIf { File(it).name == it }
-            val fixtureName = localBook ?: if (scene == "pdf") "Flux-Visual-Review.pdf" else "Flux-Visual-Review-98.txt"
+            val fixtureName = localBook ?: when (scene) {
+                "pdf" -> "Flux-Visual-Review.pdf"
+                "colors" -> "Flux-Visual-Review-103-colors.txt"
+                else -> "Flux-Visual-Review-98.txt"
+            }
             val fixture = File(File(cacheDir, "updates").apply { mkdirs() }, fixtureName)
             if (scene == "pdf" && localBook == null) {
                 val document = android.graphics.pdf.PdfDocument()
@@ -149,6 +154,7 @@ class VisualReviewActivity : ComponentActivity() {
 
                 Анна закрыла книгу. В комнате стало тихо.
             """.trimIndent())
+            if (scene == "colors" && localBook == null) fixture.appendText("\n\nПроверка цветов alpha.103.")
             if (viewModel.books.value.none { it.originalName == fixtureName }) {
                 viewModel.importBook(FileProvider.getUriForFile(this@VisualReviewActivity,
                     "$packageName.updates.fileprovider", fixture))

@@ -124,7 +124,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE }
+private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE, COLORS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -553,11 +553,16 @@ fun SpeedReaderScreen(
         )
         SpeedSettingsPanel.DIALOGUE -> SpeedDialogueSheet(
             onEditSpeaker = editSpeaker,
+            onColors = { settingsPanel = SpeedSettingsPanel.COLORS },
             settings = settings,
             viewModel = viewModel,
             onBack = { settingsPanel = SpeedSettingsPanel.HUB },
             onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
         )
+        SpeedSettingsPanel.COLORS -> SpeakerColorsSheet(state.speakerColors, settings,
+            onColor = viewModel::setSpeakerColor,
+            onAutomatic = { enabled -> viewModel.updateSettings { it.copy(speedSpeakerColor = if (enabled) io.fluxreader.app.data.SpeedSpeakerColor.CHARACTER else io.fluxreader.app.data.SpeedSpeakerColor.THEME) } },
+            onBack = { settingsPanel = SpeedSettingsPanel.DIALOGUE }, onDismiss = { settingsPanel = SpeedSettingsPanel.NONE })
         SpeedSettingsPanel.VOICE -> SpeedVoiceSettingsSheet(
             settings = settings,
             voices = speechStatus.voices,
@@ -590,12 +595,14 @@ fun SpeedReaderScreen(
         }
         DialogueSpeakerEditor(current?.speaker, automatic?.speaker, candidates,
             onApply = { name, auto -> viewModel.correctDialogueSpeaker(reply, name, auto); speakerEditorReply = null },
+            settings = settings, colors = state.speakerColors, onColor = viewModel::setSpeakerColor,
             onDismiss = { speakerEditorReply = null })
     }
 
     BackHandler(enabled = settingsPanel != SpeedSettingsPanel.NONE) {
         settingsPanel = when (settingsPanel) {
             SpeedSettingsPanel.HUB -> SpeedSettingsPanel.NONE
+            SpeedSettingsPanel.COLORS -> SpeedSettingsPanel.DIALOGUE
             SpeedSettingsPanel.DISPLAY,
             SpeedSettingsPanel.BEHAVIOR,
             SpeedSettingsPanel.VOICE,
@@ -812,7 +819,8 @@ private fun SpeedViewport(
                             settings.useWastelandDesign || settings.useCyberpunkDesign -> LocalExperimentalColors.current.background
                             settings.speedUseReaderTheme -> MaterialTheme.colorScheme.background
                             else -> Color(settings.speedBackgroundColorArgb)
-                        }, accent = focusColor, onClick = onEditSpeaker, modifier = Modifier.padding(horizontal = 12.dp))
+                        }, accent = focusColor, onClick = onEditSpeaker, characterColor = state.speakerColors.forName(dialogueLabel.text),
+                            modifier = Modifier.padding(horizontal = 12.dp))
                     }
                 }
                 SpeedChunkText(
@@ -1749,6 +1757,7 @@ private fun SpeedSettingsHub(
 @Composable
 private fun SpeedDialogueSheet(
     onEditSpeaker: () -> Unit,
+    onColors: () -> Unit,
     settings: ReaderSettings,
     viewModel: AppViewModel,
     onBack: () -> Unit,
@@ -1772,6 +1781,7 @@ private fun SpeedDialogueSheet(
             if (speedState.chunk?.let { DialogueReplyLocator.at(speedState.chapterText, it.startOffset) } != null) {
                 SettingsMenuRow("Говорящий в этой реплике", onClick = onEditSpeaker)
             }
+            SettingsMenuRow("Цвета персонажей", onClick = onColors)
             SpeedDialogueSettings(settings, viewModel::updateSettings)
         }
     }

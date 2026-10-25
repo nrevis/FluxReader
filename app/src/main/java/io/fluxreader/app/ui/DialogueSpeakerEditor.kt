@@ -23,6 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.fluxreader.app.data.ReaderSettings
+import io.fluxreader.app.reader.BookSpeakerColors
+import io.fluxreader.app.reader.SpeakerTint
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -32,10 +35,19 @@ internal fun DialogueSpeakerEditor(
     candidates: List<String>,
     onApply: (String?, Boolean) -> Unit,
     onDismiss: () -> Unit,
+    settings: ReaderSettings,
+    colors: BookSpeakerColors,
+    onColor: (String, SpeakerTint?) -> Unit,
 ) {
     var name by remember { mutableStateOf(currentName.orEmpty()) }
+    var editingColor by remember { mutableStateOf<String?>(null) }
     val normalized = name.trim()
     val valid = normalized.length in 1..80 && normalized.none(Char::isISOControl)
+    editingColor?.let { target ->
+        SpeakerColorsSheet(colors, settings, initialName = target, onColor = onColor, onAutomatic = {},
+            onBack = { editingColor = null }, onDismiss = onDismiss)
+        return
+    }
     FluxModalBottomSheet(onDismissRequest = onDismiss) {
         ModalSheetHeader("Говорящий", onClose = onDismiss, subtitle = "Для этой реплики",
             modifier = Modifier.padding(horizontal = 20.dp))
@@ -50,7 +62,8 @@ internal fun DialogueSpeakerEditor(
                         FilterChip(selected = normalized == candidate, onClick = { name = candidate }, label = { Text(candidate) })
                     }
             }
-            Button(onClick = { onApply(normalized, false) }, enabled = valid, modifier = Modifier.fillMaxWidth()) { Text("Сохранить") }
+            if (valid) SettingsMenuRow("Цвет имени в книге", onClick = { editingColor = normalized })
+            Button(onClick = { onApply(normalized, false) }, enabled = valid, modifier = Modifier.fillMaxWidth()) { Text("Сохранить имя") }
             TextButton(onClick = { onApply(null, false) }) { Text("Говорящий неизвестен") }
             TextButton(onClick = { onApply(null, true) }) {
                 Text("Автоматически${automaticName?.let { ": $it" }.orEmpty()}", color = MaterialTheme.colorScheme.primary)
