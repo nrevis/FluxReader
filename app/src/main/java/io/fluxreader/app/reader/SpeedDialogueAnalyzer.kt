@@ -24,15 +24,18 @@ object SpeedDialogueAnalyzer {
         "пояснил(?:а|и)?|объяснил(?:а|и)?|уточнил(?:а|и)?|повторил(?:а|и)?|подтвердил(?:а|и)?|" +
         "прибавил(?:а|и)?|вставил(?:а|и)?|заключил(?:а|и)?|выпалил(?:а|и)?|прервал(?:а|и)?|" +
         "рявкнул(?:а|и)?|заявил(?:а|и)?|проворчал(?:а|и)?|простонал(?:а|и)?|протянул(?:а|и)?|" +
-        "прохрипел(?:а|и)?|прорычал(?:а|и)?|отрезал(?:а|и)?|выдохнул(?:а|и)?)"
-    private val speechVerb = Regex("(?<![\\p{L}])$VERB(?![\\p{L}])", RegexOption.IGNORE_CASE)
+        "прохрипел(?:а|и)?|прорычал(?:а|и)?|отрезал(?:а|и)?|выдохнул(?:а|и)?|" +
+        "сообщил(?:а|и)?|попросил(?:а|и)?|потребовал(?:а|и)?|предупредил(?:а|и)?|" +
+        "заверил(?:а|и)?|признал(?:а|и)?|признал(?:ся|ась|ись)|объявил(?:а|и)?|" +
+        "затараторил(?:а|и)?|заговорил(?:а|и)?|прервал(?:ся|ась|ись)|пожаловал(?:ся|ась|ись))"
+    internal val speechVerb = Regex("(?<![\\p{L}])$VERB(?![\\p{L}])", RegexOption.IGNORE_CASE)
     private val actionVerb = Regex("(?<![\\p{L}])(?:улыбнул(?:ся|ась)|вздохнул(?:а)?|пожал(?:а)?|" +
         "кивнул(?:а)?|покачал(?:а)?|отвернул(?:ся|ась)|встал(?:а)?|уш[её]л|ушла|" +
         "засмеял(?:ся|ась)|нахмурил(?:ся|ась)|просиял(?:а)?|усмехнул(?:ся|ась))(?![\\p{L}])", RegexOption.IGNORE_CASE)
     // Case sensitivity is deliberate: IGNORE_CASE on this pattern used to accept ordinary nouns.
     private val name = Regex("(?<![\\p{L}])[\\p{Lu}][\\p{Ll}’'-]{1,29}(?:$SPACE+[\\p{Lu}][\\p{Ll}’'-]{1,29}){0,2}")
     private val notNames = setOf("Он", "Она", "Они", "Оно", "Это", "Этот", "Эта", "Один", "Одна", "Кто", "Как", "Что", "Его", "Её", "Ее", "Все", "Всё", "Тот", "Тогда", "Потом", "Затем", "Да", "Нет", "Ну", "Но", "Или", "Не", "Вы", "Ты", "Их", "Мой", "Моя", "Наш", "Наша", "Сам", "Наконец", "После", "Через", "На", "Взяв", "Покачав", "Подумав", "Оставшись", "Понизив", "Увидев", "Поправив", "Пожав", "Подняв", "Опустившись", "Неожиданно", "Вскоре", "Однажды", "Наутро", "Примерно", "Немного", "Очень", "Совершенно", "Тихо", "Стараясь", "Замолчав", "Помолчав", "Выходя", "Оторвавшись", "Сдержав", "Придав", "Наладив", "Сев", "Голос", "Губы", "Дрожащей", "Резким", "Старческий")
-    private val attributionAdverbs = setOf("тихо", "громко", "коротко", "спокойно", "сухо", "снова", "вновь", "неожиданно", "наконец", "сразу", "быстро", "вдруг", "устало", "тяжело", "решительно", "задумчиво", "насмешливо", "лукаво", "мягко", "презрительно", "скептически", "довольно", "резко")
+    internal val attributionAdverbs = setOf("негромко", "весело", "очень", "тихо", "громко", "коротко", "спокойно", "сухо", "снова", "вновь", "неожиданно", "наконец", "сразу", "быстро", "вдруг", "устало", "тяжело", "решительно", "задумчиво", "насмешливо", "лукаво", "мягко", "презрительно", "скептически", "довольно", "резко")
     private val obliqueName = Regex("(?iu).*(?:ого|его|ому|ему|ыми|ими|ых|их|у|ю|е)$")
     private val words = Regex("[^\\s\\p{Zs}]+")
     private val quotePairs = listOf('«' to '»', '“' to '”', '"' to '"')
@@ -132,6 +135,7 @@ object SpeedDialogueAnalyzer {
         val ranges = mutableListOf<Pair<Int, Int>>()
         var current = start
         var speaker = intro
+        var sawAuthor = false
         var index = 0
         while (index < dashes.size) {
             val dash = dashes[index]
@@ -139,7 +143,7 @@ object SpeedDialogueAnalyzer {
             val author = attribution(line.substring(dash + 1, next).take(220), allowAction = true)
             if (author != null) {
                 if (dash > current) ranges += current to dash
-                if (speaker == null) speaker = author.speaker
+                if (!sawAuthor) { speaker = author.speaker; sawAuthor = true }
                 current = if (next < end) next + 1 else end
                 index += 2
             } else index++
@@ -175,6 +179,8 @@ object SpeedDialogueAnalyzer {
         val afterName = name.find(subject)?.takeIf { it.range.first == 0 }?.value?.let(::cleanName)
         return DialogueAttribution(beforeName ?: afterName)
     }
+
+    internal fun attributionVerb(text: String): MatchResult? = speechVerb.find(text) ?: actionVerb.find(text)
 
     /** Reuses the attribution grammar; only a subject pronoun beside the speech verb qualifies. */
     internal fun authorPronoun(raw: String): String? {

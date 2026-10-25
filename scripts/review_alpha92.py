@@ -24,7 +24,7 @@ check('Library gets folder plus change callback', 'currentFolder = libraryFolder
 check('Reader/Settings switches cannot alter folder by navigation', 'onSettings = viewModel::showSettings' in entry and 'currentFolder: String,' in ui)
 check('Folder rename and move rebase active location', app.count('rebaseLibraryFolder(folderPath, path)') == 2)
 check('Folder deletion falls back to parent', 'rebaseLibraryFolder(folderPath, LibraryFolderTree.parent(folderPath))' in app)
-check('Audio filters exist', 'BOOKS, PDF, TXT, AUDIO' in ui and 'WastelandLibraryFilter.AUDIO -> "AUDIO"' in ui)
+check('Audio filters exist', 'BOOKS, PDF, TXT, AUDIO' in ui and 'WastelandLibraryFilter.AUDIO -> "Аудио"' in ui)
 check('AUDIO excludes textual books', 'WastelandLibraryFilter.AUDIO -> false' in ui)
 check('AUDIO includes only audio entries', '(wastelandFilter == WastelandLibraryFilter.ALL || wastelandFilter == WastelandLibraryFilter.AUDIO)' in ui)
 check('Audio-only folders contribute to navigation', 'folders + audiobooks.entries.map { it.folderPath }' in ui)

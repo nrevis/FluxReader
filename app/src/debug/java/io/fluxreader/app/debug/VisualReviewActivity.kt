@@ -8,6 +8,15 @@ import androidx.activity.viewModels
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import io.fluxreader.app.AppViewModel
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import io.fluxreader.app.ui.*
+import io.fluxreader.app.update.*
+import io.fluxreader.app.data.SpeedSpeakerColor
 import io.fluxreader.app.data.ReaderThemeMode
 import io.fluxreader.app.data.SpeedSpeakerStyle
 import io.fluxreader.app.data.SpeedSpeakerPosition
@@ -36,6 +45,12 @@ class VisualReviewActivity : ComponentActivity() {
             experimentalCrtEnabled = intent.getBooleanExtra("effects", false),
             speedDialogueEnabled = true,
             speedDialogueBookAnalysis = intent.getBooleanExtra("bookAnalysis", false),
+            speedSpeakerColor = when (intent.getStringExtra("speakerColor")) {
+                "theme" -> SpeedSpeakerColor.THEME
+                "character" -> SpeedSpeakerColor.CHARACTER
+                "blue" -> SpeedSpeakerColor.BLUE
+                else -> it.speedSpeakerColor
+            },
             speedSpeakerStyle = when (intent.getStringExtra("label")) { "text" -> SpeedSpeakerStyle.TEXT; "chip" -> SpeedSpeakerStyle.CHIP; else -> SpeedSpeakerStyle.BUBBLE },
             speedSpeakerFontSizeSp = intent.getIntExtra("nameSize", 24).toFloat(),
             speedSpeakerPosition = if (intent.getBooleanExtra("below", false)) SpeedSpeakerPosition.BELOW else SpeedSpeakerPosition.ABOVE,
@@ -48,6 +63,56 @@ class VisualReviewActivity : ComponentActivity() {
             speedChapterIntroMs = 0,
         ) }
         setContent { FluxReaderApp(viewModel) }
+        if (scene == "updates") {
+            val phase = runCatching { UpdatePhase.valueOf(intent.getStringExtra("phase") ?: "AVAILABLE") }.getOrDefault(UpdatePhase.AVAILABLE)
+            setContent {
+                val settings by viewModel.settings.collectAsState()
+                var state by remember { mutableStateOf(GitHubUpdateState(phase = phase, autoCheck = false,
+                    progressPercent = 50, message = when (phase) {
+                        UpdatePhase.ERROR -> "Не удалось проверить обновления"
+                        UpdatePhase.CHECKING -> "Проверяем обновления…"
+                        UpdatePhase.CURRENT -> "Установлена актуальная версия"
+                        UpdatePhase.DOWNLOADING -> "Скачивание: 50%"
+                        UpdatePhase.READY -> "Обновление готово к установке"
+                        else -> "Доступна новая версия"
+                    }, release = if (phase in listOf(UpdatePhase.IDLE, UpdatePhase.CHECKING, UpdatePhase.CURRENT)) null else UpdateRelease(
+                        "v0.2.0-alpha.102", "Flux Reader alpha.102", "Flux Reader alpha.102\n\n• Оформление диалогов в цветах темы.\n• Крупные кнопки полного экрана.\n• Компактные меню и отдельный список изменений.",
+                        RELEASES_WEB_URL, "", "preview.apk", 0L, null, null, null))) }
+                FluxTheme(settings) {
+                    val content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ModalSheetHeader("Обновления · проверка", onClose = { finish() })
+                            GitHubUpdateContent(state, { state = state.copy(autoCheck = it) },
+                                { state = state.copy(includePreReleases = it) },
+                                { state = state.copy(phase = UpdatePhase.CURRENT, message = "Установлена актуальная версия", release = null) },
+                                { state = state.copy(phase = UpdatePhase.DOWNLOADING, message = "Скачивание: 50%") },
+                                { state = state.copy(message = "Проверка кнопки установки") }, {})
+                        }
+                    }
+                    if (theme == "wasteland") WastelandDeviceFrame(content = content)
+                    else if (theme == "cyberpunk") CyberpunkDeviceFrame(content = content)
+                    else Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), content = content)
+                    DeviceStatusCrown(false, theme != "standard")
+                }
+            }
+            return
+        }
+        if (scene == "audio") {
+            lifecycleScope.launch {
+                val audio = File(File(cacheDir, "updates").apply { mkdirs() }, "Flux-Visual-Review.wav")
+                if (!audio.exists()) {
+                    val bytes = java.nio.ByteBuffer.allocate(64044).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    bytes.put("RIFF".toByteArray()).putInt(64036).put("WAVEfmt ".toByteArray()).putInt(16)
+                    bytes.putShort(1).putShort(1).putInt(16000).putInt(32000).putShort(2).putShort(16)
+                    bytes.put("data".toByteArray()).putInt(64000)
+                    audio.writeBytes(bytes.array())
+                }
+                // Audiobooks require a persistable SAF grant. The visual harness copies this
+                // silent file to Downloads and selects it through the real document picker.
+                viewModel.showAudiobooks()
+            }
+            return
+        }
         if (scene == "library") return
         if (scene == "settings") {
             viewModel.showSettings()
@@ -55,9 +120,22 @@ class VisualReviewActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             val localBook = intent.getStringExtra("bookFile")?.takeIf { File(it).name == it }
-            val fixtureName = localBook ?: "Flux-Visual-Review-98.txt"
+            val fixtureName = localBook ?: if (scene == "pdf") "Flux-Visual-Review.pdf" else "Flux-Visual-Review-98.txt"
             val fixture = File(File(cacheDir, "updates").apply { mkdirs() }, fixtureName)
-            if (localBook == null) fixture.writeText("""
+            if (scene == "pdf" && localBook == null) {
+                val document = android.graphics.pdf.PdfDocument()
+                repeat(3) { pageNumber ->
+                    val page = document.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(612, 792, pageNumber + 1).create())
+                    val paint = android.graphics.Paint().apply { color = android.graphics.Color.BLACK; textSize = 22f }
+                    page.canvas.drawColor(android.graphics.Color.WHITE)
+                    page.canvas.drawText("Flux Reader - PDF ${pageNumber + 1}", 40f, 70f, paint)
+                    paint.textSize = 16f
+                    repeat(16) { line -> page.canvas.drawText("Interface review, page ${pageNumber + 1}, line ${line + 1}.", 40f, 120f + line * 28f, paint) }
+                    document.finishPage(page)
+                }
+                fixture.outputStream().use { document.writeTo(it) }; document.close()
+            }
+            if (localBook == null && scene != "pdf") fixture.writeText("""
                 — Добрый вечер! — сказала Анна.
 
                 — Садитесь, садитесь, прошу вас! И побыстрее, сегодня у нас много работы!
@@ -79,7 +157,7 @@ class VisualReviewActivity : ComponentActivity() {
                 viewModel.books.first { list -> list.any { it.originalName == fixtureName } }
                     .first { it.originalName == fixtureName }
             }
-            if (scene == "reader") {
+            if (scene == "reader" || scene == "pdf") {
                 viewModel.openReader(book.id)
                 return@launch
             }

@@ -69,7 +69,7 @@ fun BookSearchSheet(
         keyboardController?.show()
     }
 
-    ModalBottomSheet(onDismissRequest = ::dismissSearch) {
+    FluxModalBottomSheet(onDismissRequest = ::dismissSearch) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -80,7 +80,7 @@ fun BookSearchSheet(
             )
             if (pdfMode) {
                 Text(
-                    "Поиск PDF использует встроенный текстовый слой. OCR массово не запускается, чтобы не зависать на сотнях страниц.",
+                    "Поиск по текстовому слою PDF.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

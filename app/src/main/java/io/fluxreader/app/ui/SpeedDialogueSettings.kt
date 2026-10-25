@@ -13,6 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import io.fluxreader.app.data.useWastelandDesign
+import io.fluxreader.app.data.useCyberpunkDesign
 import androidx.compose.ui.unit.dp
 import io.fluxreader.app.data.SpeedSpeakerStyle
 import io.fluxreader.app.data.SpeedSpeakerPosition
@@ -30,26 +33,31 @@ internal fun SpeedDialogueSettings(
     settings: ReaderSettings,
     onUpdate: ((ReaderSettings) -> ReaderSettings) -> Unit,
 ) {
+    val experimental = settings.useWastelandDesign || settings.useCyberpunkDesign
+    val palette = LocalExperimentalColors.current
+    val previewBackground = if (experimental) palette.background else if (settings.speedUseReaderTheme) MaterialTheme.colorScheme.background else Color(settings.speedBackgroundColorArgb)
+    val previewAccent = if (experimental) palette.accent else if (settings.speedUseReaderTheme) MaterialTheme.colorScheme.primary else Color(settings.speedFocusColorArgb)
+    val previewText = if (experimental) palette.text else if (settings.speedUseReaderTheme) MaterialTheme.colorScheme.onBackground else Color(settings.speedTextColorArgb)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsToggleRow(
             title = "Распознавание диалогов (эксперимент)",
-            subtitle = "Выключено по умолчанию. Определяет прямую речь локально, без сети и ИИ.",
+            subtitle = "",
             checked = settings.speedDialogueEnabled,
         ) { value -> onUpdate { it.copy(speedDialogueEnabled = value) } }
         if (settings.speedDialogueEnabled) {
             SettingsToggleRow(
                 title = "Анализ всей книги (эксперимент)",
-                subtitle = "В фоне собирает имена и ищет говорящих по словам автора перед репликой. EPUB, FB2 и TXT; без сети. Чтение доступно сразу.",
+                subtitle = "EPUB, FB2 и TXT. Работает в фоне без сети.",
                 checked = settings.speedDialogueBookAnalysis,
             ) { value -> onUpdate { it.copy(speedDialogueBookAnalysis = value) } }
             SettingsToggleRow(
                 title = "Маркер прямой речи",
-                subtitle = "Показывает «Прямая речь», когда имя неизвестно или скрыто.",
+                subtitle = "Если говорящий неизвестен.",
                 checked = settings.speedDialogueIndicator,
             ) { value -> onUpdate { it.copy(speedDialogueIndicator = value) } }
             SettingsToggleRow(
                 title = "Имя говорящего",
-                subtitle = "Показывает определённого говорящего. Если имя неизвестно, используется маркер прямой речи.",
+                subtitle = "",
                 checked = settings.speedDialogueNames,
             ) { value -> onUpdate { it.copy(speedDialogueNames = value) } }
             if (settings.speedDialogueNames || settings.speedDialogueIndicator) {
@@ -59,22 +67,21 @@ internal fun SpeedDialogueSettings(
                         FilterChip(selected = settings.speedSpeakerStyle == style, onClick = { onUpdate { it.copy(speedSpeakerStyle = style) } }, label = { Text(title) })
                     }
                 }
-                Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background, RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().background(previewBackground, MaterialTheme.shapes.large).padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE) {
-                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = MaterialTheme.colorScheme.background, accent = MaterialTheme.colorScheme.primary, namedSpeaker = settings.speedDialogueNames)
+                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = previewBackground, accent = previewAccent, namedSpeaker = settings.speedDialogueNames)
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
                         }
-                        Text("Добрый вечер!", style = MaterialTheme.typography.titleLarge)
+                        Text("Добрый вечер!", style = MaterialTheme.typography.titleLarge, color = previewText)
                         if (settings.speedSpeakerPosition == SpeedSpeakerPosition.BELOW) {
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
-                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = MaterialTheme.colorScheme.background, accent = MaterialTheme.colorScheme.primary, namedSpeaker = settings.speedDialogueNames)
+                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = previewBackground, accent = previewAccent, namedSpeaker = settings.speedDialogueNames)
                         }
                     }
                 }
-                Text("Предпросмотр имени", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 SettingsValueSlider("Размер имени", settings.speedSpeakerFontSizeSp, 12f..40f, { "${it.toInt()} sp" }) { value -> onUpdate { it.copy(speedSpeakerFontSizeSp = value) } }
-                SettingsToggleRow("Жирный шрифт имени", "Выделяет имя говорящего.", settings.speedSpeakerBold) { value -> onUpdate { it.copy(speedSpeakerBold = value) } }
+                SettingsToggleRow("Жирный шрифт имени", "", settings.speedSpeakerBold) { value -> onUpdate { it.copy(speedSpeakerBold = value) } }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(SpeedSpeakerPosition.ABOVE to "Над репликой", SpeedSpeakerPosition.BELOW to "Под репликой").forEach { (position, title) ->
                         FilterChip(selected = settings.speedSpeakerPosition == position, onClick = { onUpdate { it.copy(speedSpeakerPosition = position) } }, label = { Text(title) })
@@ -93,12 +100,12 @@ internal fun SpeedDialogueSettings(
             }
             SettingsToggleRow(
                 title = "Короткие реплики целиком",
-                subtitle = "Только RSVP: реплики до 6 слов. Длинные остаются пословными.",
+                subtitle = "RSVP: до 6 слов.",
                 checked = settings.speedDialogueShortReplies,
             ) { value -> onUpdate { it.copy(speedDialogueShortReplies = value) } }
             SettingsToggleRow(
                 title = "Дополнительная пауза на новой реплике",
-                subtitle = "Не заменяет обычные паузы на пунктуации.",
+                subtitle = "",
                 checked = settings.speedDialoguePauseEnabled,
             ) { value -> onUpdate { it.copy(speedDialoguePauseEnabled = value) } }
             if (settings.speedDialoguePauseEnabled) {
@@ -108,8 +115,7 @@ internal fun SpeedDialogueSettings(
                 }
             }
             Text(
-                "Тире, кавычки и реплики со словами автора внутри. " +
-                    "Анализ книги использует явно названных персонажей и ближайшее введение реплики. Неоднозначные случаи остаются без имени.",
+                "Неоднозначные реплики остаются без имени.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

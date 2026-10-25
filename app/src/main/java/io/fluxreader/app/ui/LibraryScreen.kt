@@ -403,11 +403,11 @@ fun LibraryScreen(
                     ) {
                             WastelandLibraryFilter.entries.forEach { filter ->
                                 val label = when (filter) {
-                                        WastelandLibraryFilter.ALL -> "ALL"
-                                        WastelandLibraryFilter.BOOKS -> "BOOKS"
+                                        WastelandLibraryFilter.ALL -> "Все"
+                                        WastelandLibraryFilter.BOOKS -> "Книги"
                                         WastelandLibraryFilter.PDF -> "PDF"
                                         WastelandLibraryFilter.TXT -> "TXT"
-                                        WastelandLibraryFilter.AUDIO -> "AUDIO"
+                                        WastelandLibraryFilter.AUDIO -> "Аудио"
                                     }
                                 if (LocalFluxThemeMode.current.isExperimentalChrome) {
                                     ExperimentalTab(label, wastelandFilter == filter) { wastelandFilterName = filter.name }
@@ -595,8 +595,8 @@ fun LibraryScreen(
                 .background(LocalExperimentalColors.current.background),
         ) {
             ExperimentalTopBar(
-                title = if (selectionMode) "SELECTED ${selectedBookIds.size}" else "LIBRARY",
-                subtitle = if (selectionMode) "MULTI SELECT" else "${books.size} BOOKS · ${libraryViewLabel(settings.libraryViewMode)}",
+                title = if (selectionMode) "Выбрано: ${selectedBookIds.size}" else "Библиотека",
+                subtitle = if (selectionMode) "Выбор книг" else "Книг: ${books.size} · ${libraryViewLabel(settings.libraryViewMode)}",
                 actions = {
                     if (selectionMode) {
                         LibrarySelectionActionsMenu(
@@ -647,7 +647,7 @@ fun LibraryScreen(
 
             if (!selectionMode) ExperimentalHardwareRail(
                 items = listOf(
-                    WastelandNavItem("Library", FluxIconRole.LIBRARY, Icons.AutoMirrored.Filled.MenuBook, selected = true) {
+                    WastelandNavItem("Книги", FluxIconRole.LIBRARY, Icons.AutoMirrored.Filled.MenuBook, selected = true) {
                         query = ""
                         wastelandFilterName = WastelandLibraryFilter.ALL.name
                         selectedGroup = ""
@@ -658,9 +658,9 @@ fun LibraryScreen(
                         libraryFocusManager.clearFocus(force = true)
                         libraryKeyboardController?.hide()
                     },
-                    WastelandNavItem("Search", FluxIconRole.SEARCH, Icons.Default.Search) { wastelandSearchRequested = true },
-                    WastelandNavItem("Add", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active) { importChooserVisible = true },
-                    WastelandNavItem("Settings", FluxIconRole.SETTINGS, Icons.Default.Settings) { onSettings() },
+                    WastelandNavItem("Поиск", FluxIconRole.SEARCH, Icons.Default.Search) { wastelandSearchRequested = true },
+                    WastelandNavItem("Добавить", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active) { importChooserVisible = true },
+                    WastelandNavItem("Настройки", FluxIconRole.SETTINGS, Icons.Default.Settings) { onSettings() },
                 ),
             )
         }
@@ -1232,9 +1232,9 @@ private fun EmptyLibrary(modifier: Modifier = Modifier) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     FluxThemedIcon(FluxIconRole.LIBRARY, Icons.AutoMirrored.Filled.MenuBook,
                         contentDescription = null, modifier = Modifier.size(40.dp))
-                    Text("LIBRARY / EMPTY", color = LocalFluxThemeMode.current.chromeAccent,
+                    Text("Библиотека пуста", color = LocalFluxThemeMode.current.chromeAccent,
                         style = MaterialTheme.typography.titleLarge)
-                    Text("Нажмите ADD, чтобы импортировать книги или папки.",
+                    Text("Добавьте книги или папку.",
                         color = LocalFluxThemeMode.current.chromeText,
                         style = MaterialTheme.typography.bodyMedium)
                 }
@@ -1247,7 +1247,7 @@ private fun EmptyLibrary(modifier: Modifier = Modifier) {
             FluxThemedIcon(FluxIconRole.LIBRARY, Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(12.dp))
             Text("Здесь пока пусто", style = MaterialTheme.typography.titleLarge)
-            Text("Нажмите +, чтобы добавить книги или папку.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Добавьте книги или папку.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1278,7 +1278,7 @@ private fun ContinueCard(
                     BookCover(book, Modifier.fillMaxSize(), maxSidePx = 320)
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                    Text("CONTINUE", style = MaterialTheme.typography.labelLarge, color = LocalFluxThemeMode.current.chromeAccent)
+                    Text("Продолжить", style = MaterialTheme.typography.labelLarge, color = LocalFluxThemeMode.current.chromeAccent)
                     Text(book.title, style = MaterialTheme.typography.titleMedium, color = LocalFluxThemeMode.current.chromeText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val byline = listOf(book.author, book.series).filter { it.isNotBlank() }.joinToString(" · ")
                     if (byline.isNotBlank()) {
@@ -1664,7 +1664,7 @@ private fun FolderBreadcrumb(currentFolder: String, onFolder: (String) -> Unit) 
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                ExperimentalTab("LIBRARY", currentFolder.isBlank(), onClick = { onFolder("") })
+                ExperimentalTab("Библиотека", currentFolder.isBlank(), onClick = { onFolder("") })
                 LibraryFolderTree.breadcrumbs(currentFolder).forEach { (name, path) ->
                     Text("/", color = LocalFluxThemeMode.current.chromeAccent)
                     ExperimentalTab(name, false, onClick = { onFolder(path) })
@@ -1731,7 +1731,7 @@ private fun AudioLibraryCard(
 ) {
     val compact = viewMode == LibraryViewMode.COMPACT
     val listing = viewMode == LibraryViewMode.LIST
-    val format = audio.name.substringAfterLast('.', "AUDIO").uppercase()
+    val format = audio.name.substringAfterLast('.', "Аудио").uppercase()
     var actions by remember(audio.id) { mutableStateOf(false) }
     val tileContent: @Composable () -> Unit = {
         if (listing) {

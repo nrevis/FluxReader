@@ -19,7 +19,7 @@ checks = {
         ("fullscreen back restores chrome", 'BackHandler(enabled = !chromeVisible' in reader),
         ("speed manual exit", 'onToggleFullscreen = { isFullscreen = false }' in speed),
         ("voice and WPM separate", 'if (!voiceMode)' in speed and 'if (speedTuningExpanded) SpeedControls(' in speed),
-        ("speed fullscreen has a voice/play/exit rail", all(s in speed for s in ["Modifier.fillMaxWidth().height(52.dp)", 'contentDescription = "Свернуть полный экран"', "onClick = toggleVoice", "onClick = togglePlayback"])),
+        ("speed fullscreen has a voice/play/exit rail", all(s in speed for s in ["Modifier.fillMaxWidth().height(80.dp)", 'description = "Свернуть полный экран"', 'Modifier.size(64.dp)', 'Modifier.size(32.dp)', "onClick = toggleVoice", "onClick = togglePlayback"])),
     ],
     "Критик компоновки": [
         ("fullscreen controls measured outside viewport", 'modifier = Modifier.weight(1f).fillMaxWidth()' in speed),
@@ -33,7 +33,7 @@ checks = {
     ],
     "Критик регрессий": [
         ("auto-hide still opt in", 'if (settings.readerFullscreenEnabled && chromeVisible' in reader),
-        ("settings explains tap fullscreen", 'Переключение полного экрана доступно касанием области чтения.' in settings),
+        ("settings explains tap fullscreen", 'Касание возвращает панели.' in settings),
         ("no obsolete three-mode tabs", 'ReadingWorkspaceModeBar(' not in (UI/'FluxReaderApp.kt').read_text()),
         ("experimental design remains opt-in", 'settings.useWastelandDesign' in speed and 'settings.useCyberpunkDesign' in speed),
         ("shared folder navigation remains", 'FolderBreadcrumb(normalizedFolder, onFolder)' in lib),

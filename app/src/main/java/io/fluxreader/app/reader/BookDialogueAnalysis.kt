@@ -2,7 +2,7 @@ package io.fluxreader.app.reader
 
 import java.security.MessageDigest
 
-enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT }
+enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT, SCENE_PRONOUN, GRAMMATICAL_SUBJECT }
 
 enum class DialogueGender { MASCULINE, FEMININE }
 
@@ -75,10 +75,7 @@ class DialogueCharacterRoster(
  * paragraphs or alternate A/B: entrances, groups, vocatives and scene changes make that unsafe.
  */
 object BookDialogueAnalyzer {
-    private val speechCue = Regex("(?iu)(?<![\\p{L}])(?:сказал(?:а)?|спросил(?:а)?|ответил(?:а)?|" +
-        "произн[её]с(?:ла)?|проговорил(?:а)?|прошептал(?:а)?|крикнул(?:а)?|воскликнул(?:а)?|" +
-        "затараторил(?:а)?|заговорил(?:а)?|начал(?:а)?|продолжил(?:а)?|объявил(?:а)?|" +
-        "скомандовал(?:а)?|позвал(?:а)?)(?![\\p{L}])")
+    private val speechCue = SpeedDialogueAnalyzer.speechVerb
     private val orderCue = Regex("(?iu)(?<![\\p{L}])призвал(?:а)?[\\s\\p{Zs}]+(?:всех[\\s\\p{Zs}]+)?к[\\s\\p{Zs}]+тишине(?![\\p{L}])")
     private val safeBridge = Regex("(?iu)^(?:(?:затем|снова|вновь|тихо|громко|быстро|вдруг|наконец|спокойно|неожиданно|сразу|решительно)[\\s\\p{Zs}]*)*$")
     private val mannerBridge = Regex("(?u)^со?[\\s\\p{Zs}]+(?:[\\p{Ll}]+[\\s\\p{Zs}]+){0,2}(?:скоростью|улыбкой|вздохом|усмешкой|трудом)$", RegexOption.IGNORE_CASE)
@@ -96,9 +93,14 @@ object BookDialogueAnalyzer {
         val mentions = if (forms.isEmpty()) null else Regex(
             "(?<![\\p{L}’'-])(?:" + forms.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) } + ")(?![\\p{L}’'-])",
         )
+        val nameForms = DialogueNameForms(roster)
+        val scene = DialogueScene(roster, nameForms)
         var paragraph = -1
         var introduction: String? = null
         var pronounSpeaker: String? = null
+        var pronounEvidence = DialogueEvidence.PRONOUN_ANTECEDENT
+        var roleSpeaker: String? = null
+        var roleAmbiguous = false
         val result = local.entries.mapIndexed { position, entry ->
             checkpoint()
             val span = entry.span
@@ -111,26 +113,43 @@ object BookDialogueAnalyzer {
                 val previousStart = text.lastIndexOf('\n', previousEnd - 1) + 1
                 val prefix = if (previousEnd - previousStart <= 4096) text.substring(previousStart, previousEnd) else ""
                 introduction = if (mentions == null) null else introducedSpeaker(prefix, mentions, roster)
-                pronounSpeaker = null
-                // The local parser has already separated speech from the author's remark.
-                // Look only inside that gap; names or pronouns in the quoted words never count.
+                scene.advance(text, begin, checkpoint)
+            }
+            if (!span.continuation) {
+                pronounSpeaker = null; roleSpeaker = null; roleAmbiguous = false
+                var previousEnd = begin
+                while (previousEnd > 0 && text[previousEnd - 1].isWhitespace()) previousEnd--
+                val previousStart = text.lastIndexOf('\n', previousEnd - 1) + 1
+                val prefix = if (previousEnd - previousStart <= 4096) text.substring(previousStart, previousEnd) else ""
                 val next = local.entries.getOrNull(position + 1)?.span?.start ?: paragraphEnd
                 val remarkEnd = minOf(next, paragraphEnd)
-                if (span.speaker == null && remarkEnd - span.endExclusive in 1..512 && mentions != null) {
+                if (remarkEnd - span.endExclusive in 1..512) {
                     val remark = text.substring(span.endExclusive, remarkEnd)
-                    val pronoun = SpeedDialogueAnalyzer.authorPronoun(remark)
-                    if (pronoun != null) pronounSpeaker = pronounAntecedent(prefix, pronoun, mentions, roster)
+                    val roles = RussianDialogueRoles.parse(remark, nameForms)
+                    roleSpeaker = roles.speaker
+                    roleAmbiguous = roles.ambiguous
+                    val pronoun = roles.pronoun ?: SpeedDialogueAnalyzer.authorPronoun(remark)
+                    if (pronoun != null) {
+                        pronounSpeaker = if (mentions == null) null else pronounAntecedent(prefix, pronoun, mentions, roster)
+                        if (pronounSpeaker in roles.addressees || nameForms.mentions(prefix).map { it.name }.distinct().size > 1) pronounSpeaker = null
+                        pronounEvidence = DialogueEvidence.PRONOUN_ANTECEDENT
+                        if (pronounSpeaker == null) {
+                            pronounSpeaker = scene.resolve(pronoun, roles.addressees)
+                            pronounEvidence = DialogueEvidence.SCENE_PRONOUN
+                        }
+                    }
                 }
             }
-            when {
+            val resolved = when {
+                roleAmbiguous -> entry.copy(span = span.copy(speaker = null), evidence = DialogueEvidence.GRAMMATICAL_SUBJECT)
+                roleSpeaker != null && span.speaker != roleSpeaker -> entry.copy(span = span.copy(speaker = roleSpeaker), evidence = DialogueEvidence.GRAMMATICAL_SUBJECT)
+                pronounSpeaker != null -> entry.copy(span = span.copy(speaker = pronounSpeaker), evidence = pronounEvidence)
                 span.speaker != null -> entry
-                pronounSpeaker != null -> entry.copy(
-                    span = span.copy(speaker = pronounSpeaker), evidence = DialogueEvidence.PRONOUN_ANTECEDENT,
-                )
-                // An unresolved author's remark must not inherit a contradictory introduction.
                 span.continuation || span.endExclusive < paragraphEnd || introduction == null -> entry
                 else -> entry.copy(span = span.copy(speaker = introduction), evidence = DialogueEvidence.SCENE_INTRODUCTION)
             }
+            resolved.span.speaker?.let { scene.record(it, span.start) }
+            resolved
         }
         return ChapterDialogueIndex(local.textFingerprint, result)
     }

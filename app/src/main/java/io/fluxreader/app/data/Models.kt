@@ -157,7 +157,7 @@ data class ReaderSettings(
     val speedDialogueIndicator: Boolean = true,
     val speedSpeakerStyle: SpeedSpeakerStyle = SpeedSpeakerStyle.BUBBLE,
     val speedSpeakerPosition: SpeedSpeakerPosition = SpeedSpeakerPosition.ABOVE,
-    val speedSpeakerColor: SpeedSpeakerColor = SpeedSpeakerColor.CHARACTER,
+    val speedSpeakerColor: SpeedSpeakerColor = SpeedSpeakerColor.THEME,
     val speedSpeakerFontSizeSp: Float = 20f,
     val speedSpeakerBold: Boolean = true,
     val speedSpeakerBackgroundAlpha: Float = 0.16f,

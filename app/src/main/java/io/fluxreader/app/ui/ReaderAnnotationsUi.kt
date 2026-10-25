@@ -127,7 +127,7 @@ fun ReaderAnnotationsSheet(
         else textLauncher.launch("$safe.txt")
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    FluxModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
             ModalSheetHeader(title = "Заметки и выделения", onClose = onDismiss)
 

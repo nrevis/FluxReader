@@ -62,7 +62,7 @@ fun AudiobooksScreen(viewModel: AppViewModel, settings: ReaderSettings, onBack: 
     val importFiles = { picker.launch(arrayOf("*/*")) }
     val header: @Composable () -> Unit = {
         if (experimental) {
-            ExperimentalTopBar(title = "AUDIOBOOKS", subtitle = "${state.entries.size} FILES",
+            ExperimentalTopBar(title = "Аудиокниги", subtitle = "Файлов: ${state.entries.size}",
                 navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") } },
                 actions = { IconButton(onClick = importFiles) { Icon(Icons.Default.Add, contentDescription = "Добавить аудиокнигу") } })
         } else {
@@ -80,7 +80,7 @@ fun AudiobooksScreen(viewModel: AppViewModel, settings: ReaderSettings, onBack: 
                     verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Headphones, contentDescription = null)
                     Text("Здесь будут ваши аудиокниги")
-                    Text("Добавьте MP3, M4A, M4B, AAC, OGG, FLAC или WAV.", style = MaterialTheme.typography.bodySmall)
+                    Text("MP3, M4B, M4A, WAV и другие.", style = MaterialTheme.typography.bodySmall)
                     Button(onClick = importFiles) { Text("Добавить аудиокниги") }
                 }
             } else {
@@ -119,7 +119,7 @@ fun AudiobooksScreen(viewModel: AppViewModel, settings: ReaderSettings, onBack: 
     }
     deletingId?.let { id ->
         AlertDialog(onDismissRequest = { deletingId = null }, title = { Text("Убрать аудиокнигу?") },
-            text = { Text("Файл на устройстве не удаляется. Запись и её позиция будут удалены из Flux Reader.") },
+            text = { Text("Из Flux Reader будут удалены запись и позиция. Файл останется на устройстве.") },
             confirmButton = { TextButton(onClick = { viewModel.removeAudiobook(id); deletingId = null }) { Text("Убрать") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Отмена") } })
     }

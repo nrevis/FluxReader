@@ -103,11 +103,6 @@ fun ReaderPreferencesControls(
                 },
                 label = { Text("JetBrains") },
             )
-            Text(
-                "Моноширинный профиль: равные поля, спокойное левое выравнивание и автопереносы слов.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         }
 
@@ -138,11 +133,6 @@ fun ReaderPreferencesControls(
                     )
                 }
             }
-            Text(
-                if (settings.themeAppearance == ThemeAppearance.SYSTEM) "Автоматически следует светлой/тёмной теме Android." else "Зафиксированный режим независимо от темы Android.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -157,7 +147,7 @@ fun ReaderPreferencesControls(
                 Column(Modifier.weight(1f)) {
                     Text("Экспериментальный дизайн", style = MaterialTheme.typography.labelLarge, color = settingsInk)
                     Text(
-                        "Включает выбранную оболочку. Стиль корпуса и палитра настраиваются независимо. Без галочки сохраняется обычный интерфейс.",
+                        "Оболочка и палитра настраиваются отдельно.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -180,8 +170,6 @@ fun ReaderPreferencesControls(
             // Selecting a swatch writes BOTH fields so switching shells never reveals an
             // unexpected stale palette. The optional original screen colors stay available.
             Text("Цветовая схема", style = MaterialTheme.typography.titleMedium, color = settingsInk)
-            Text("Одна палитра для обычного и экспериментального оформления. Оболочка меняется отдельно.",
-                style = MaterialTheme.typography.bodySmall, color = settingsInk.copy(alpha = 0.8f))
             if (settings.experimentalDesignEnabled) {
                 FilterChip(
                     selected = settings.experimentalPalette == null,
@@ -213,39 +201,31 @@ fun ReaderPreferencesControls(
             }
             if (settings.experimentalDesignEnabled) {
                 ExperimentalThemePreview(settings.experimentalFrameTheme)
-                Text(
-                    if (settings.experimentalFrameTheme == ReaderThemeMode.WASTELAND_TERMINAL)
-                        "Полный Wasteland-скин: ржавый металл и потёртости, CRT/scanlines, янтарно-фосфорная палитра, отдельная индустриальная пиктограмма и физическая рамка терминала."
-                    else
-                        "Полный Cyberpunk-скин: HUD/microgrid-подложка, cyan/magenta/violet, отдельная неоновая пиктограмма, угловатые панели и статические glitch-акценты.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
                 Text("Экранные эффекты", style = MaterialTheme.typography.titleMedium, color = settingsInk)
                     SettingsToggleRow(
                         "CRT-эффект",
-                        "Все дополнительные экранные эффекты можно выключить.",
+                        "",
                         settings.experimentalCrtEnabled,
                     ) { checked -> onUpdate { it.copy(experimentalCrtEnabled = checked) } }
                     if (settings.experimentalCrtEnabled) {
                         SettingsToggleRow(
                             "Линии развёртки",
-                            "Горизонтальные полосы.",
+                            "",
                             settings.experimentalScanlinesEnabled,
                         ) { checked -> onUpdate { it.copy(experimentalScanlinesEnabled = checked) } }
                         SettingsToggleRow(
                             "Свечение",
-                            "Слабое люминофорное свечение.",
+                            "",
                             settings.experimentalGlowEnabled,
                         ) { checked -> onUpdate { it.copy(experimentalGlowEnabled = checked) } }
                         SettingsToggleRow(
                             "Шум",
-                            "Статичная зернистость.",
+                            "",
                             settings.experimentalNoiseEnabled,
                         ) { checked -> onUpdate { it.copy(experimentalNoiseEnabled = checked) } }
                         SettingsToggleRow(
                             "Виньетка",
-                            "Затемнение краёв.",
+                            "",
                             settings.experimentalVignetteEnabled,
                         ) { checked -> onUpdate { it.copy(experimentalVignetteEnabled = checked) } }
                         SettingsValueSlider(
@@ -279,7 +259,7 @@ fun ReaderPreferencesControls(
         if (includeNavigationBasics) {
             SettingSwitch(
                 title = "Автоматически скрывать панели",
-                subtitle = "Выключено по умолчанию. Переключение полного экрана доступно касанием области чтения.",
+                subtitle = "Касание возвращает панели.",
                 checked = settings.readerFullscreenEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(readerFullscreenEnabled = enabled) } },
             )
@@ -294,13 +274,13 @@ fun ReaderPreferencesControls(
             }
             SettingSwitch(
                 title = "Свайп страниц",
-                subtitle = "Предыдущая / следующая страница.",
+                subtitle = "",
                 checked = settings.swipeNavigationEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(swipeNavigationEnabled = enabled) } },
             )
             SettingSwitch(
                 title = "Тап по краям",
-                subtitle = "Левый край — назад, правый — вперёд; центр показывает панели.",
+                subtitle = "Слева — назад, справа — вперёд, в центре — панели.",
                 checked = settings.edgeTapZonesEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(edgeTapZonesEnabled = enabled) } },
             )
@@ -341,7 +321,7 @@ fun ReaderPreferencesControls(
             }
             SettingSwitch(
                 title = "Анимация полного экрана",
-                subtitle = "Плавный вход в полноэкранное чтение и возврат обратно.",
+                subtitle = "",
                 checked = settings.fullscreenTransitionEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(fullscreenTransitionEnabled = enabled) } },
             )
@@ -352,7 +332,7 @@ fun ReaderPreferencesControls(
             }
             SettingSwitch(
                 title = "Плавная прокрутка",
-                subtitle = "Плавно двигает текст в режиме прокрутки.",
+                subtitle = "",
                 checked = settings.smoothPageTurns,
                 onCheckedChange = { enabled -> onUpdate { it.copy(smoothPageTurns = enabled) } },
             )
@@ -387,7 +367,7 @@ fun ReaderPreferencesControls(
         if (includeAdvancedText) {
             SettingSwitch(
                 title = "Автоперенос слов",
-                subtitle = "Типографские переносы. В профиле JetBrains включаются автоматически.",
+                subtitle = "",
                 checked = settings.hyphenationEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(hyphenationEnabled = enabled) } },
             )
@@ -397,17 +377,12 @@ fun ReaderPreferencesControls(
             Text("Заголовки глав", style = MaterialTheme.typography.titleMedium)
             SettingSwitch(
                 title = "По центру",
-                subtitle = "Одинаково применяется в обычном и полноэкранном режимах.",
+                subtitle = "",
                 checked = settings.centerChapterHeadings,
                 onCheckedChange = { enabled -> onUpdate { it.copy(centerChapterHeadings = enabled) } },
             )
             PreferenceSlider("Название главы", settings.chapterTitleScale, 1.15f..2.40f, { "×${String.format("%.2f", it)}" }) { value -> onUpdate { it.copy(chapterTitleScale = value) } }
             PreferenceSlider("Номер / подзаголовок", settings.chapterHeadingScale, 1.05f..2.00f, { "×${String.format("%.2f", it)}" }) { value -> onUpdate { it.copy(chapterHeadingScale = value) } }
-            Text(
-                "Заголовок измеряется тем же движком, что и основной текст, поэтому пагинация учитывает его реальную высоту и не обрезает следующую строку.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         }
     }

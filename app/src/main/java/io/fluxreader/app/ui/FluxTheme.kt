@@ -3,6 +3,7 @@ package io.fluxreader.app.ui
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -117,6 +118,8 @@ fun FluxTheme(settings: ReaderSettings, systemBarsBackground: Color? = null, con
     CompositionLocalProvider(
         LocalFluxThemeMode provides settings.activeUiTheme,
         LocalExperimentalColors provides experimentalColors(settings, scheme),
+        // Experimental screens also contain plain Columns, outside a Material Surface.
+        LocalContentColor provides scheme.onBackground,
     ) {
         MaterialTheme(colorScheme = scheme, shapes = shapes, typography = typography, content = content)
     }

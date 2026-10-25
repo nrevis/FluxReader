@@ -67,6 +67,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.key
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Scaffold
@@ -2479,7 +2481,7 @@ private fun ReaderTocSheet(
     onChapter: (Int) -> Unit,
 ) {
     val chapters = state.outline?.chapters.orEmpty()
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    FluxModalBottomSheet(onDismissRequest = onDismiss) {
         ModalSheetHeader(
             title = "Оглавление",
             onClose = onDismiss,
@@ -2514,10 +2516,17 @@ private fun ReaderSettingsSheet(
     onDismiss: () -> Unit,
 ) {
     var panel by rememberSaveable { mutableStateOf(ReaderSettingsPanel.MAIN) }
-    ModalBottomSheet(
+    FluxModalBottomSheet(
+        sheetState = key(panel) { rememberModalBottomSheetState(skipPartiallyExpanded = true) },
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = panel == ReaderSettingsPanel.MAIN),
+        onBack = if (panel == ReaderSettingsPanel.MAIN) null else ({ panel = ReaderSettingsPanel.MAIN }),
     ) {
+        ModalSheetHeader(
+            title = if (panel == ReaderSettingsPanel.MAIN) "Чтение" else "Расширенные настройки чтения",
+            onBack = if (panel == ReaderSettingsPanel.MAIN) null else ({ panel = ReaderSettingsPanel.MAIN }),
+            onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp),
+        )
+
         Column(
             Modifier
                 .fillMaxWidth()
@@ -2527,11 +2536,6 @@ private fun ReaderSettingsSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (panel == ReaderSettingsPanel.MAIN) {
-                ModalSheetHeader(
-                    title = "Чтение",
-                    subtitle = "Основные параметры одинаково работают в обычном и полноэкранном режиме.",
-                    onClose = onDismiss,
-                )
                 ReaderPreferencesControls(
                     settings = settings,
                     onUpdate = viewModel::updateSettings,
@@ -2560,33 +2564,9 @@ private fun ReaderSettingsSheet(
                     includeNavigationAdvanced = false,
                     includeText = false,
                 )
-                Surface(
-                    modifier = Modifier.fillMaxWidth().clickable { panel = ReaderSettingsPanel.ADVANCED },
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Расширенные", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Абзацы, заголовки, переносы, точные зоны тапов и анимации",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                SettingsMenuRow("Расширенные", "Абзацы, переносы и жесты") { panel = ReaderSettingsPanel.ADVANCED }
+
             } else {
-                ModalSheetHeader(
-                    title = "Расширенные настройки чтения",
-                    onBack = { panel = ReaderSettingsPanel.MAIN },
-                    onClose = onDismiss,
-                )
                 ReaderPreferencesControls(
                     settings = settings,
                     onUpdate = viewModel::updateSettings,

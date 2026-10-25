@@ -109,6 +109,8 @@ import io.fluxreader.app.data.SpeedLowerSegmentMode
 import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.data.SpeedPacingMode
 import io.fluxreader.app.data.SpeedProgressMode
+import io.fluxreader.app.reader.DialogueReply
+import io.fluxreader.app.reader.DialogueReplyLocator
 import io.fluxreader.app.reader.SpeedDialoguePlayback
 import io.fluxreader.app.reader.SpeedDialoguePresentation
 import io.fluxreader.app.reader.SpeedDialogueAnalyzer
@@ -164,6 +166,7 @@ fun SpeedReaderScreen(
         else -> Color(settings.speedGuideColorArgb)
     }
     var settingsPanel by remember { mutableStateOf(SpeedSettingsPanel.NONE) }
+    var speakerEditorReply by remember(state.bookId, state.chapterIndex) { mutableStateOf<DialogueReply?>(null) }
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var speedTuningExpanded by rememberSaveable { mutableStateOf(false) }
     var introVisible by remember { mutableStateOf(false) }
@@ -249,6 +252,16 @@ fun SpeedReaderScreen(
             viewModel.speedPause()
             speech.setPosition(state.chunk?.startOffset ?: 0)
             voiceMode = true
+        }
+    }
+    val editSpeaker: () -> Unit = {
+        if (voiceMode) speech.pause()
+        viewModel.speedPause()
+        displayState.chunk?.let { chunk ->
+            DialogueReplyLocator.at(state.chapterText, chunk.startOffset)?.let {
+                settingsPanel = SpeedSettingsPanel.NONE
+                speakerEditorReply = it
+            }
         }
     }
     val previousSentence: () -> Unit = {
@@ -387,28 +400,25 @@ fun SpeedReaderScreen(
                 viewModel = viewModel,
                 introVisible = introVisible,
                 onRetry = viewModel::speedRetry,
+                onEditSpeaker = editSpeaker,
                 immersiveMode = true,
                 onTogglePlayback = togglePlayback,
                 onToggleFullscreen = { isFullscreen = false },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             Row(
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().height(80.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = toggleVoice, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.RecordVoiceOver,
-                        contentDescription = if (voiceMode) "Выключить озвучку" else "Включить озвучку",
-                        tint = if (voiceMode) focusColor else textColor)
-                }
-                IconButton(onClick = togglePlayback, modifier = Modifier.size(48.dp)) {
-                    Icon(if (displayState.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (displayState.playing) "Пауза" else "Старт", tint = focusColor)
-                }
-                IconButton(onClick = { isFullscreen = false }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.FullscreenExit, contentDescription = "Свернуть полный экран", tint = focusColor)
-                }
+                FullscreenSpeedButton(onClick = toggleVoice, active = voiceMode, color = textColor,
+                    icon = Icons.Default.RecordVoiceOver,
+                    description = if (voiceMode) "Выключить озвучку" else "Включить озвучку")
+                FullscreenSpeedButton(onClick = togglePlayback, active = true, color = focusColor,
+                    icon = if (displayState.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    description = if (displayState.playing) "Пауза" else "Старт")
+                FullscreenSpeedButton(onClick = { isFullscreen = false }, active = false, color = focusColor,
+                    icon = Icons.Default.FullscreenExit, description = "Свернуть полный экран")
             }
         }
     } else {
@@ -488,6 +498,7 @@ fun SpeedReaderScreen(
                     viewModel = viewModel,
                     introVisible = introVisible,
                     onRetry = viewModel::speedRetry,
+                    onEditSpeaker = editSpeaker,
                     onTogglePlayback = togglePlayback,
                     onToggleFullscreen = { isFullscreen = !isFullscreen },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -541,6 +552,7 @@ fun SpeedReaderScreen(
             onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
         )
         SpeedSettingsPanel.DIALOGUE -> SpeedDialogueSheet(
+            onEditSpeaker = editSpeaker,
             settings = settings,
             viewModel = viewModel,
             onBack = { settingsPanel = SpeedSettingsPanel.HUB },
@@ -567,6 +579,20 @@ fun SpeedReaderScreen(
         )
     }
 
+    speakerEditorReply?.let { reply ->
+        val automatic = if (settings.speedDialogueBookAnalysis) state.dialogueIndex?.at(reply.start)
+            ?: SpeedDialogueAnalyzer.at(state.chapterText, reply.start) else SpeedDialogueAnalyzer.at(state.chapterText, reply.start)
+        val current = DialogueReplyLocator.resolve(state.chapterText, reply.start,
+            state.dialogueIndex.takeIf { settings.speedDialogueBookAnalysis }, state.dialogueCorrections)
+        val candidates = remember(state.dialogueIndex, state.dialogueCorrections) {
+            (state.dialogueIndex?.entries.orEmpty().mapNotNull { it.span.speaker } +
+                state.dialogueCorrections.mapNotNull { it.speaker }).distinct().sorted()
+        }
+        DialogueSpeakerEditor(current?.speaker, automatic?.speaker, candidates,
+            onApply = { name, auto -> viewModel.correctDialogueSpeaker(reply, name, auto); speakerEditorReply = null },
+            onDismiss = { speakerEditorReply = null })
+    }
+
     BackHandler(enabled = settingsPanel != SpeedSettingsPanel.NONE) {
         settingsPanel = when (settingsPanel) {
             SpeedSettingsPanel.HUB -> SpeedSettingsPanel.NONE
@@ -582,6 +608,24 @@ fun SpeedReaderScreen(
 }
 
 @Composable
+private fun FullscreenSpeedButton(
+    onClick: () -> Unit,
+    active: Boolean,
+    color: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+) {
+    val themed = LocalFluxThemeMode.current.isExperimentalChrome
+    val shape = if (themed) MaterialTheme.shapes.medium else CircleShape
+    Surface(color = color.copy(alpha = if (active) .14f else .055f), shape = shape,
+        border = BorderStroke(1.dp, color.copy(alpha = if (active) .65f else .28f))) {
+        IconButton(onClick = onClick, modifier = Modifier.size(64.dp)) {
+            Icon(icon, contentDescription = description, tint = color, modifier = Modifier.size(32.dp))
+        }
+    }
+}
+
+@Composable
 private fun SpeedViewport(
     state: SpeedUiState,
     settings: ReaderSettings,
@@ -591,6 +635,7 @@ private fun SpeedViewport(
     viewModel: AppViewModel,
     introVisible: Boolean,
     onRetry: () -> Unit,
+    onEditSpeaker: (() -> Unit)? = null,
     immersiveMode: Boolean = false,
     onTogglePlayback: () -> Unit = viewModel::speedToggle,
     onToggleFullscreen: () -> Unit = {},
@@ -631,10 +676,11 @@ private fun SpeedViewport(
             }
     ) {
         val density = LocalDensity.current
-        val dialogue = remember(state.chapterText, state.chunk?.startOffset, state.dialogueIndex, settings.speedDialogueEnabled, settings.speedDialogueBookAnalysis) {
+        val dialogue = remember(state.chapterText, state.chunk?.startOffset, state.dialogueIndex, state.dialogueCorrections,
+            settings.speedDialogueEnabled, settings.speedDialogueBookAnalysis) {
             if (settings.speedDialogueEnabled) state.chunk?.let {
-                if (settings.speedDialogueBookAnalysis && state.dialogueIndex != null) state.dialogueIndex.at(it.startOffset)
-                else SpeedDialogueAnalyzer.at(state.chapterText, it.startOffset)
+                DialogueReplyLocator.resolve(state.chapterText, it.startOffset,
+                    state.dialogueIndex.takeIf { settings.speedDialogueBookAnalysis }, state.dialogueCorrections)
             } else null
         }
         val mainTextHeightPx = with(density) {
@@ -766,7 +812,7 @@ private fun SpeedViewport(
                             settings.useWastelandDesign || settings.useCyberpunkDesign -> LocalExperimentalColors.current.background
                             settings.speedUseReaderTheme -> MaterialTheme.colorScheme.background
                             else -> Color(settings.speedBackgroundColorArgb)
-                        }, accent = focusColor, modifier = Modifier.padding(horizontal = 12.dp))
+                        }, accent = focusColor, onClick = onEditSpeaker, modifier = Modifier.padding(horizontal = 12.dp))
                     }
                 }
                 SpeedChunkText(
@@ -974,18 +1020,12 @@ private fun SpeedPausePreview(
     Surface(
         modifier = modifier,
         color = textColor.copy(alpha = 0.085f),
-        shape = RoundedCornerShape(22.dp),
+        shape = MaterialTheme.shapes.large,
         border = BorderStroke(1.dp, textColor.copy(alpha = 0.14f)),
-        shadowElevation = 6.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)) {
-            Text(
-                "Контекст · тапните слово, чтобы перейти к нему",
-                color = textColor.copy(alpha = 0.64f),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
             val layoutHolder = remember(annotated) { arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1) }
             BasicText(
                 text = annotated,
@@ -1551,7 +1591,7 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                 verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("SPEED", color = LocalFluxThemeMode.current.chromeText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text("СКОРОСТЬ", color = LocalFluxThemeMode.current.chromeText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text("${wpmDraft.toInt()} WPM", color = LocalFluxThemeMode.current.chromeAccent, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 SettingsSlider(
@@ -1561,7 +1601,7 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                     valueRange = 100f..3000f,
                     steps = 28,
                 )
-                Text("PACING PROFILE", color = LocalFluxThemeMode.current.chromeText.copy(alpha = 0.84f), style = MaterialTheme.typography.labelMedium)
+                Text("ТЕМП ПОКАЗА", color = LocalFluxThemeMode.current.chromeText.copy(alpha = 0.84f), style = MaterialTheme.typography.labelMedium)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1681,27 +1721,26 @@ private fun SpeedSettingsHub(
     onOpen: (SpeedSettingsPanel) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    FluxModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        ModalSheetHeader(
+                title = "Скорочтение",
+                onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            ModalSheetHeader(
-                title = "Скорочтение",
-                subtitle = "Текст, диалоги и поведение чтения.",
-                onClose = onDismiss,
-            )
             SettingsValueSlider("Размер текста", settings.speedFontSizeSp, 24f..104f, { "${it.toInt()} sp" }) { value ->
                 viewModel.updateSettings { it.copy(speedFontSizeSp = value) }
             }
-            SpeedSettingsNavRow("Отображение", "Шрифт, направляющая, контекст и прогресс") { onOpen(SpeedSettingsPanel.DISPLAY) }
-            SpeedSettingsNavRow("Поведение", "Тапы, пауза, картинки и начало главы") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
-            SpeedSettingsNavRow("Эксперимент: диалоги", "Распознавание персонажей, короткие реплики, паузы") { onOpen(SpeedSettingsPanel.DIALOGUE) }
-            SpeedSettingsNavRow("Голос и озвучка", "Офлайн-голоса, скорость, высота тона") { onOpen(SpeedSettingsPanel.VOICE) }
+            SpeedSettingsNavRow("Отображение", "") { onOpen(SpeedSettingsPanel.DISPLAY) }
+            SpeedSettingsNavRow("Поведение", "") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
+            SpeedSettingsNavRow("Эксперимент: диалоги", "") { onOpen(SpeedSettingsPanel.DIALOGUE) }
+            SpeedSettingsNavRow("Голос и озвучка", "") { onOpen(SpeedSettingsPanel.VOICE) }
             if (settings.useWastelandDesign || settings.useCyberpunkDesign) {
-                SpeedSettingsNavRow("Экранные эффекты", "CRT, развёртка, свечение, шум") { onOpen(SpeedSettingsPanel.EFFECTS) }
+                SpeedSettingsNavRow("Экранные эффекты", "") { onOpen(SpeedSettingsPanel.EFFECTS) }
             }
-            SpeedSettingsNavRow("Расширенные", "RSVP, точные тайминги, геометрия и цвета") { onOpen(SpeedSettingsPanel.ADVANCED) }
+            SpeedSettingsNavRow("Расширенные", "RSVP, тайминги и цвета") { onOpen(SpeedSettingsPanel.ADVANCED) }
         }
     }
 }
@@ -1709,24 +1748,29 @@ private fun SpeedSettingsHub(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SpeedDialogueSheet(
+    onEditSpeaker: () -> Unit,
     settings: ReaderSettings,
     viewModel: AppViewModel,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)) {
+    FluxModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onBack = onBack) {
+        ModalSheetHeader("Эксперимент: диалоги", onBack = onBack, onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ModalSheetHeader("Эксперимент: диалоги", onBack = onBack, onClose = onDismiss)
             val speedState by viewModel.speed.collectAsState()
             if (settings.speedDialogueEnabled && settings.speedDialogueBookAnalysis) {
                 speedState.dialogueAnalysisStatus?.let { status ->
                     Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            if (speedState.chunk?.let { DialogueReplyLocator.at(speedState.chapterText, it.startOffset) } != null) {
+                SettingsMenuRow("Говорящий в этой реплике", onClick = onEditSpeaker)
             }
             SpeedDialogueSettings(settings, viewModel::updateSettings)
         }
@@ -1742,20 +1786,20 @@ private fun SpeedVoiceSettingsSheet(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    FluxModalBottomSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+        onBack = onBack,
     ) {
+        ModalSheetHeader(title = "Голос и озвучка", onBack = onBack, onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ModalSheetHeader(title = "Голос и озвучка", onBack = onBack, onClose = onDismiss)
             Text(
-                "Speed Reader использует только офлайн-голоса установленного Android TTS. " +
-                    "Отдельная нейросетевая модель в приложение пока не встроена.",
+                "Используются офлайн-голоса Android.",
                 style = MaterialTheme.typography.bodySmall,
             )
             SettingsValueSlider(
@@ -1772,15 +1816,11 @@ private fun SpeedVoiceSettingsSheet(
             ) { value -> viewModel.updateSettings { it.copy(narrationPitch = value) } }
             SettingsToggleRow(
                 title = "Следующая глава",
-                subtitle = "Сохранять настройку автоперехода при обычной озвучке.",
+                subtitle = "",
                 checked = settings.narrationAutoNextChapter,
             ) { enabled -> viewModel.updateSettings { it.copy(narrationAutoNextChapter = enabled) } }
             Text("Офлайн-голоса", style = MaterialTheme.typography.titleMedium)
-            Text(
-                if (voices.isEmpty()) "Загрузка голосов или офлайн-голоса не установлены."
-                else "Выберите установленный голос. Текущий голос будет применён при следующем запуске речи.",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            if (voices.isEmpty()) Text("Офлайн-голоса не найдены.", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = settings.narrationVoiceId.isBlank(),
@@ -1810,42 +1850,7 @@ private fun SpeedVoiceSettingsSheet(
 
 @Composable
 private fun SpeedSettingsNavRow(title: String, subtitle: String, onClick: () -> Unit) {
-    if (LocalFluxThemeMode.current.isExperimentalChrome) {
-        ExperimentalPanel(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-            contentPadding = 12.dp,
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(title.uppercase(), style = MaterialTheme.typography.titleMedium, color = LocalFluxThemeMode.current.chromeAccent)
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalFluxThemeMode.current.chromeText.copy(alpha = 0.82f))
-                }
-                Text(">", color = LocalFluxThemeMode.current.chromeAccent, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            }
-        }
-        return
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
+    SettingsMenuRow(title, subtitle, onClick)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1856,23 +1861,23 @@ private fun SpeedDisplaySheet(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    FluxModalBottomSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+        onBack = onBack,
     ) {
+        ModalSheetHeader(
+                title = "Отображение",
+                onBack = onBack,
+                onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ModalSheetHeader(
-                title = "Отображение",
-                onBack = onBack,
-                onClose = onDismiss,
-            )
             SettingsToggleRow(
                 title = "Тема читалки",
-                subtitle = "Использовать фон, текст и акцент текущей темы Flux Reader.",
+                subtitle = "",
                 checked = settings.speedUseReaderTheme,
             ) { enabled -> viewModel.updateSettings { it.copy(speedUseReaderTheme = enabled) } }
             Text("Шрифт", style = MaterialTheme.typography.titleMedium)
@@ -1887,19 +1892,14 @@ private fun SpeedDisplaySheet(
             }
             SettingsToggleRow(
                 title = "Направляющая ORP",
-                subtitle = "Короткие метки показывают фиксированную точку взгляда, как в Reedy.",
+                subtitle = "Точка фиксации взгляда.",
                 checked = settings.speedShowGuide,
             ) { enabled -> viewModel.updateSettings { it.copy(speedShowGuide = enabled) } }
             SettingsToggleRow(
                 title = "Следующие слова",
-                subtitle = "Показывать периферийный серый контекст справа от текущей фиксации.",
+                subtitle = "",
                 checked = settings.speedReedyFlowEnabled,
             ) { enabled -> viewModel.updateSettings { it.copy(speedReedyFlowEnabled = enabled) } }
-            Text(
-                "По умолчанию точка взгляда находится в левой трети экрана, а все RSVP-слова рисуются одним размером. Справа остаётся больше места для серого контекста.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Text("Сегмент под словом", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SpeedLowerSegmentMode.entries.forEach { mode ->
@@ -1916,7 +1916,7 @@ private fun SpeedDisplaySheet(
             }
             SettingsToggleRow(
                 title = "Прогресс",
-                subtitle = "Тонкая полоса прогресса в верхней части экрана.",
+                subtitle = "",
                 checked = settings.speedShowProgress,
             ) { enabled -> viewModel.updateSettings { it.copy(speedShowProgress = enabled) } }
             if (settings.speedShowProgress) {
@@ -1946,38 +1946,38 @@ private fun SpeedBehaviorSheet(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    FluxModalBottomSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+        onBack = onBack,
     ) {
+        ModalSheetHeader(
+                title = "Поведение",
+                onBack = onBack,
+                onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ModalSheetHeader(
-                title = "Поведение",
-                onBack = onBack,
-                onClose = onDismiss,
-            )
             SettingsToggleRow(
-                title = "Тап = Play / Pause",
-                subtitle = "Один тап — Play/Pause в обычном и полном экране; двойной тап — переключить полноэкранный режим.",
+                title = "Касание: старт / пауза",
+                subtitle = "Двойное касание — полный экран.",
                 checked = settings.speedTapToToggle,
             ) { enabled -> viewModel.updateSettings { it.copy(speedTapToToggle = enabled) } }
             SettingsToggleRow(
                 title = "Кнопки громкости",
-                subtitle = "Короткое нажатие — Play / Pause; удержание — предыдущее или следующее предложение.",
+                subtitle = "Нажатие — старт / пауза; удержание — переход по предложениям.",
                 checked = settings.speedVolumeKeysEnabled,
             ) { enabled -> viewModel.updateSettings { it.copy(speedVolumeKeysEnabled = enabled) } }
             SettingsToggleRow(
                 title = "Текст на паузе",
-                subtitle = "На паузе показывать окружающий абзац. По слову можно тапнуть и продолжить с него.",
+                subtitle = "Касание слова меняет позицию чтения.",
                 checked = settings.speedShowPausePreview,
             ) { enabled -> viewModel.updateSettings { it.copy(speedShowPausePreview = enabled) } }
             SettingsToggleRow(
                 title = "Умный возврат после паузы",
-                subtitle = "После долгой паузы вернуться к началу текущего предложения.",
+                subtitle = "После долгой паузы — к началу предложения.",
                 checked = settings.speedAutoRewindAfterPause,
             ) { enabled -> viewModel.updateSettings { it.copy(speedAutoRewindAfterPause = enabled) } }
             SettingsValueSlider("Картинка на экране", settings.speedImagePauseMs.toFloat(), 800f..8000f, { String.format("%.1f с", it / 1000f) }) { value ->
@@ -1986,11 +1986,6 @@ private fun SpeedBehaviorSheet(
             SettingsValueSlider("Заставка новой главы", settings.speedChapterIntroMs.toFloat(), 0f..5000f, { if (it < 100f) "выкл." else String.format("%.1f с", it / 1000f) }) { value ->
                 viewModel.updateSettings { it.copy(speedChapterIntroMs = value.toInt()) }
             }
-            Text(
-                "После изображения и заставки главы плавное ускорение запускается заново, поэтому текст не стартует рывком на полной скорости.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -2003,20 +1998,20 @@ private fun SpeedAdvancedSheet(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    FluxModalBottomSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+        onBack = onBack,
     ) {
+        ModalSheetHeader(
+                title = "Расширенные",
+                onBack = onBack,
+                onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ModalSheetHeader(
-                title = "Расширенные",
-                onBack = onBack,
-                onClose = onDismiss,
-            )
             Text("Механика RSVP", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SpeedMode.entries.forEach { mode ->
@@ -2042,19 +2037,19 @@ private fun SpeedAdvancedSheet(
             }
             SettingsToggleRow(
                 title = "Умная разбивка",
-                subtitle = "Не оставлять пунктуацию и короткие связки в неестественных местах.",
+                subtitle = "",
                 checked = settings.speedSmartChunking,
             ) { enabled -> viewModel.updateSettings { it.copy(speedSmartChunking = enabled) } }
             SettingsToggleRow(
                 title = "Адаптивная длина",
-                subtitle = "Сложные фрагменты получают меньше слов за одну фиксацию.",
+                subtitle = "Меньше слов в сложных фрагментах.",
                 checked = settings.speedAdaptiveChunkSize,
             ) { enabled -> viewModel.updateSettings { it.copy(speedAdaptiveChunkSize = enabled) } }
 
             Text("Тайминги", style = MaterialTheme.typography.titleMedium)
             SettingsToggleRow(
                 title = "Микропаузы",
-                subtitle = "Дополнительное время на пунктуации и сложных словах.",
+                subtitle = "",
                 checked = settings.speedMicroPausesEnabled,
             ) { enabled -> viewModel.updateSettings { it.copy(speedMicroPausesEnabled = enabled) } }
             if (settings.speedMicroPausesEnabled) {
@@ -2065,7 +2060,7 @@ private fun SpeedAdvancedSheet(
             }
             SettingsToggleRow(
                 title = "Плавный разгон",
-                subtitle = "После старта, картинки и новой главы скорость набирается постепенно.",
+                subtitle = "",
                 checked = settings.speedGradualAcceleration,
             ) { enabled -> viewModel.updateSettings { it.copy(speedGradualAcceleration = enabled) } }
             if (settings.speedGradualAcceleration) {
@@ -2079,7 +2074,7 @@ private fun SpeedAdvancedSheet(
             Text("Геометрия текста", style = MaterialTheme.typography.titleMedium)
             SettingsToggleRow(
                 title = "Одинаковый размер слов",
-                subtitle = "Обычные слова сохраняют размер. Слишком длинные уменьшаются, чтобы буквы не обрезались.",
+                subtitle = "Длинные слова уменьшаются до ширины экрана.",
                 checked = settings.speedFixedFontSize,
             ) { enabled -> viewModel.updateSettings { it.copy(speedFixedFontSize = enabled) } }
             SettingsValueSlider("Позиция точки взгляда", settings.speedHorizontalFocusFraction, 0.18f..0.50f, { "${(it * 100).toInt()}%" }) { value ->
@@ -2105,7 +2100,7 @@ private fun SpeedAdvancedSheet(
             if (!settings.speedFixedFontSize) {
                 SettingsToggleRow(
                     title = "Автоподгонка",
-                    subtitle = "Уменьшать только слова, которые не помещаются в доступную область.",
+                    subtitle = "",
                     checked = settings.speedAutoFitText,
                 ) { enabled -> viewModel.updateSettings { it.copy(speedAutoFitText = enabled) } }
             }
@@ -2114,7 +2109,7 @@ private fun SpeedAdvancedSheet(
                 Text("Направляющая", style = MaterialTheme.typography.titleMedium)
                 SettingsToggleRow(
                     title = "Поперечные метки",
-                    subtitle = "Короткие штрихи сверху и снизу ORP.",
+                    subtitle = "",
                     checked = settings.speedShowFocusTicks,
                 ) { enabled -> viewModel.updateSettings { it.copy(speedShowFocusTicks = enabled) } }
                 SettingsValueSlider("Высота", settings.speedGuideHeightFraction, 0.15f..0.80f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedGuideHeightFraction = value) } }

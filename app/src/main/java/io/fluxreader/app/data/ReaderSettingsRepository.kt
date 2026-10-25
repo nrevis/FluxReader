@@ -233,7 +233,7 @@ class ReaderSettingsRepository(context: Context) {
                 speedDialogueIndicator = prefs.getBoolean("speedDialogueIndicatorV1", true),
                 speedSpeakerStyle = runCatching { SpeedSpeakerStyle.valueOf(prefs.getString("speedSpeakerStyleV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerStyle.BUBBLE),
                 speedSpeakerPosition = runCatching { SpeedSpeakerPosition.valueOf(prefs.getString("speedSpeakerPositionV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerPosition.ABOVE),
-                speedSpeakerColor = runCatching { SpeedSpeakerColor.valueOf(prefs.getString("speedSpeakerColorV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerColor.CHARACTER),
+                speedSpeakerColor = runCatching { SpeedSpeakerColor.valueOf(prefs.getString("speedSpeakerColorV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerColor.THEME),
                 speedSpeakerFontSizeSp = prefs.getFloat("speedSpeakerFontSizeSpV1", 20f),
                 speedSpeakerBold = prefs.getBoolean("speedSpeakerBoldV1", true),
                 speedSpeakerBackgroundAlpha = prefs.getFloat("speedSpeakerBackgroundAlphaV1", .16f),

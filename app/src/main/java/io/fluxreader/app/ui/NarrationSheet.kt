@@ -51,12 +51,12 @@ internal fun NarrationSheet(
     onUpdate: ((ReaderSettings) -> ReaderSettings) -> Unit,
 ) {
     val context = LocalContext.current
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    FluxModalBottomSheet(onDismissRequest = onDismiss) {
+        ModalSheetHeader("Озвучивание книги", onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Озвучивание книги", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Качество и доступность голосов зависят от установленного Android TTS. " +
-                    "Сетевые голоса могут отправлять текст речевому сервису.",
+                "Голоса Android. Сетевые голоса могут отправлять текст речевому сервису.",
                 style = MaterialTheme.typography.bodySmall,
             )
             status.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -82,7 +82,6 @@ internal fun NarrationSheet(
             }
             HorizontalDivider()
             Text("Выбор голоса (${status.currentLanguage})", style = MaterialTheme.typography.titleMedium)
-            Text("Локальные нейроголоса доступны через установленный Android TTS-движок sherpa-onnx/Piper. Модель и JNI-библиотека пока не входят в Flux Reader. Фразовые WAV-файлы офлайн-голосов сохраняются в локальном кэше до 64 МБ с предзагрузкой следующих фраз. Сетевые голоса не кэшируются.", style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { onUpdate { it.copy(narrationVoiceId = "") } }) { Text(if (settings.narrationVoiceId.isBlank()) "✓ Автоматически — лучший доступный" else "Автоматически — лучший доступный") }
             Column(Modifier.height(220.dp).verticalScroll(rememberScrollState())) {
                 val sorted = status.voices.filter { it.language.startsWith(status.currentLanguage) }

@@ -98,7 +98,7 @@ fun JetBrainsNerdFontImporter(
         Text("JetBrains Nerd Font", style = MaterialTheme.typography.labelLarge)
         Text(
             if (settings.customFontPath.isBlank()) {
-                "Импортируйте свой .ttf/.otf. Пока используется системный monospace."
+                "Не подключён. Используется системный моноширинный шрифт."
             } else {
                 "Подключён: ${settings.customFontName.ifBlank { "пользовательский шрифт" }}"
             },

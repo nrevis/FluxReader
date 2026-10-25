@@ -911,10 +911,10 @@ grep -q 'contentDescription = "Закрыть"' "$MODAL_PRIMITIVES"
 grep -q 'internal fun DestructiveConfirmDialog' "$MODAL_PRIMITIVES"
 grep -q 'containerColor = MaterialTheme.colorScheme.error' "$MODAL_PRIMITIVES"
 grep -q 'ModalSheetHeader(' "$BOOK_SEARCH_UI"
-grep -q 'properties = ModalBottomSheetProperties(shouldDismissOnBackPress = panel == ReaderSettingsPanel.MAIN)' "$READER_UI"
+grep -q 'onBack = if (panel == ReaderSettingsPanel.MAIN) null else ({ panel = ReaderSettingsPanel.MAIN })' "$READER_UI"
 grep -q 'BackHandler(enabled = panel == ReaderSettingsPanel.ADVANCED)' "$READER_UI"
 grep -q 'panel = ReaderSettingsPanel.MAIN' "$READER_UI"
-[[ $(grep -c 'properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)' "$SPEED_UI") -ge 4 ]] || {
+[[ $(grep -c 'onBack = onBack' "$SPEED_UI") -ge 4 ]] || {
   echo "❌ alpha.42: nested Speed Reader sheets must own Back instead of dismissing"
   exit 65
 }
@@ -1219,7 +1219,7 @@ lib = Path('app/src/main/java/io/fluxreader/app/ui/LibraryScreen.kt').read_text(
 if 'ContinueCard(' not in lib or 'if (!selectionMode) SpeedCardButton(onClick = { onSpeed(book.id) })' not in lib:
     raise SystemExit('❌ alpha.49: Continue card Speed action missing')
 fab_guard = 'if (!selectionMode && !importState.active)' in lib or 'settings.theme != ReaderThemeMode.WASTELAND_TERMINAL && !selectionMode && !importState.active' in lib
-wasteland_add_guard = 'WastelandNavItem("Add", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active)' in lib
+wasteland_add_guard = 'WastelandNavItem("Добавить", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active)' in lib
 if not fab_guard or not wasteland_add_guard:
     raise SystemExit('❌ alpha.49: add action remains active during import')
 repo = Path('app/src/main/java/io/fluxreader/app/data/LibraryRepository.kt').read_text()
@@ -1557,9 +1557,9 @@ echo "✅ alpha.62 LibraryScreen padding scope compile guards OK"
 LIBRARY_SCREEN="app/src/main/java/io/fluxreader/app/ui/LibraryScreen.kt"
 grep -q 'val libraryContent: @Composable (PaddingValues) -> Unit' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: reusable measured library content missing"; exit 194; }
 grep -q 'Box(Modifier.weight(1f).fillMaxWidth())' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: Wasteland book viewport is not the weighted region"; exit 195; }
-grep -q 'WastelandNavItem("Search", FluxIconRole.SEARCH, Icons.Default.Search) { wastelandSearchRequested = true }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible SEARCH hardware button is not wired directly"; exit 196; }
-grep -q 'WastelandNavItem("Add", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active) { importChooserVisible = true }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible ADD hardware button is not wired directly"; exit 197; }
-grep -q 'WastelandNavItem("Settings", FluxIconRole.SETTINGS, Icons.Default.Settings) { onSettings() }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible SETTINGS hardware button is not wired directly"; exit 198; }
+grep -q 'WastelandNavItem("Поиск", FluxIconRole.SEARCH, Icons.Default.Search) { wastelandSearchRequested = true }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible SEARCH hardware button is not wired directly"; exit 196; }
+grep -q 'WastelandNavItem("Добавить", FluxIconRole.ADD, Icons.Default.Add, enabled = !importState.active) { importChooserVisible = true }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible ADD hardware button is not wired directly"; exit 197; }
+grep -q 'WastelandNavItem("Настройки", FluxIconRole.SETTINGS, Icons.Default.Settings) { onSettings() }' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: visible SETTINGS hardware button is not wired directly"; exit 198; }
 grep -q 'libraryKeyboardController?.show()' "$LIBRARY_SCREEN" || { echo "❌ alpha.63: SEARCH does not request keyboard visibility"; exit 199; }
 if sed -n '/if ((settings.useWastelandDesign || settings.useCyberpunkDesign)) {/,/} else {/p' "$LIBRARY_SCREEN" | grep -q 'Scaffold('; then
   echo "❌ alpha.63: Wasteland Library regressed to independently measured Scaffold bars"

@@ -7,10 +7,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -25,44 +23,41 @@ internal fun ExperimentalEffectsSheet(
     onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    ModalBottomSheet(
+    FluxModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = onBack == null),
+        onBack = onBack,
     ) {
+        ModalSheetHeader(title = "Экранные эффекты", onBack = onBack, onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
+
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ModalSheetHeader(title = "Экранные эффекты", onBack = onBack, onClose = onDismiss)
-            Text(
-                "Применяется к Wasteland и Cyberpunk только при включённом экспериментальном дизайне.",
-                style = MaterialTheme.typography.bodySmall,
-            )
             SettingsToggleRow(
                 title = "CRT-эффект",
-                subtitle = "Главный переключатель всех экранных эффектов.",
+                subtitle = "",
                 checked = settings.experimentalCrtEnabled,
             ) { enabled -> onUpdate { it.copy(experimentalCrtEnabled = enabled) } }
             if (settings.experimentalCrtEnabled) {
                 SettingsToggleRow(
                     title = "Линии развёртки",
-                    subtitle = "Тонкие горизонтальные линии на экране.",
+                    subtitle = "",
                     checked = settings.experimentalScanlinesEnabled,
                 ) { enabled -> onUpdate { it.copy(experimentalScanlinesEnabled = enabled) } }
                 SettingsToggleRow(
                     title = "Свечение люминофора",
-                    subtitle = "Небольшая подсветка поверхности экрана.",
+                    subtitle = "",
                     checked = settings.experimentalGlowEnabled,
                 ) { enabled -> onUpdate { it.copy(experimentalGlowEnabled = enabled) } }
                 SettingsToggleRow(
                     title = "Шум",
-                    subtitle = "Статичная лёгкая зернистость.",
+                    subtitle = "",
                     checked = settings.experimentalNoiseEnabled,
                 ) { enabled -> onUpdate { it.copy(experimentalNoiseEnabled = enabled) } }
                 SettingsToggleRow(
                     title = "Затемнение краёв",
-                    subtitle = "Слабая виньетка по бокам.",
+                    subtitle = "",
                     checked = settings.experimentalVignetteEnabled,
                 ) { enabled -> onUpdate { it.copy(experimentalVignetteEnabled = enabled) } }
                 SettingsValueSlider(

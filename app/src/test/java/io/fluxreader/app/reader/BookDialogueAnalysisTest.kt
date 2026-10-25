@@ -55,12 +55,12 @@ class BookDialogueAnalysisTest {
             index.entries.map { it.span.start to it.span.endExclusive })
     }
 
-    @Test fun pronounsInsideQuotedSpeechAndAcrossNarrativeDoNotAssignNames() {
+    @Test fun quotedPronounsDoNotAssignNamesButBoundedSceneNarrativeMayRetainReferent() {
         val roster = learnedRoster("— Да, — сказала Анна.")
-        for (text in listOf("Анна остановилась.\n\n— Она сказала, что всё хорошо.",
-            "Анна остановилась.\n\nЗа окном светало.\n\n— Да, — сказала она.")) {
-            assertTrue(BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster).entries.all { it.span.speaker == null })
-        }
+        val quoted = "Анна остановилась.\n\n— Она сказала, что всё хорошо."
+        assertTrue(BookDialogueAnalyzer.enrich(quoted, BookDialogueAnalyzer.local(quoted), roster).entries.all { it.span.speaker == null })
+        val narrative = "Анна остановилась.\n\nЗа окном светало.\n\n— Да, — сказала она."
+        assertEquals("Анна", BookDialogueAnalyzer.enrich(narrative, BookDialogueAnalyzer.local(narrative), roster).entries.single().span.speaker)
     }
 
     @Test fun genderEvidenceIsPartOfRosterCacheIdentity() {
@@ -87,7 +87,7 @@ class BookDialogueAnalysisTest {
     }
 
     @Test fun unknownNamesAreNotInventedFromCapitalizedWords() {
-        val text = "Анна затараторила:\n\n— Добрый день!"
+        val text = "В комнату вошла Анна и призвала всех к тишине.\n\n— Добрый день!"
         assertNull(enriched(text, listOf("Борис")).entries.single().span.speaker)
     }
 
@@ -150,8 +150,41 @@ class BookDialogueAnalysisTest {
         val text = "Анна затараторила:\n\n— Добрый вечер!"
         val index = enriched(text, listOf("Анна", "Анна Соколова", "Анна Иванова"))
         assertEquals("Анна", index.entries.single().span.speaker)
-        // A full name alone is insufficient proof that a short name refers to that character.
-        assertNull(enriched(text, listOf("Анна Соколова")).entries.single().span.speaker)
+        // A locally explicit short name is preserved, never silently expanded from a roster.
+        assertEquals("Анна", enriched(text, listOf("Анна Соколова")).entries.single().span.speaker)
+    }
+
+    @Test fun fullExplicitNamesRemainAtomicWhenTheirPartsAreAlsoKnown() {
+        for (name in listOf("Педро Зурита", "Хари Селдон", "Первый Оратор")) {
+            val text = "— Хорошо, — сказал $name. — Продолжим."
+            val names = listOf(name) + name.split(' ')
+            val index = enriched(text, names)
+            assertTrue(name, index.entries.all { it.span.speaker == name })
+        }
+        val text = "— Хорошо, — сказала Анна\u202fСоколова."
+        assertEquals("Анна Соколова", enriched(text, listOf("Анна", "Соколова", "Анна Соколова")).entries.single().span.speaker)
+    }
+
+    @Test fun sceneNarrativeScanIsCancellableBeforeNextReply() {
+        val text = "Анна остановилась.\n\n" + "За окном светало.\n\n".repeat(100) + "— Да, — сказала она."
+        var checks = 0
+        try {
+            BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), learnedRoster("— Да, — сказала Анна.")) {
+                if (++checks == 10) throw InterruptedException("cancel")
+            }
+            fail("Expected cancellation during narrative scan")
+        } catch (_: InterruptedException) { assertEquals(10, checks) }
+    }
+
+    @Test fun laterNarrativeNamesDoNotMakeAnExplicitSubjectAmbiguous() {
+        val roster = learnedRoster("— Да, — сказал Игорь.", "— Да, — сказал Алексей.", "— Да, — сказал Борис.")
+        for (remark in listOf("сказал Игорь в ответ на взгляд Бориса", "спросил Игорь (Алексей рассердился)",
+            "сообщил Игорь Алексею и Борису", "прошипел Игорь и побежал догонять Алексея")) {
+            val text = "— Да, — $remark. — Продолжим."
+            assertTrue(remark, BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster).entries.all { it.span.speaker == "Игорь" })
+        }
+        val chorus = "— Да, — хором ответили Игорь и Алексей."
+        assertNull(BookDialogueAnalyzer.enrich(chorus, BookDialogueAnalyzer.local(chorus), roster).entries.single().span.speaker)
     }
 
     @Test fun longParagraphsUnicodeAndOffsetsRemainStable() {

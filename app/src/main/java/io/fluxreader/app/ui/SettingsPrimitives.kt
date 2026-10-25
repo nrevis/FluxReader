@@ -1,5 +1,6 @@
 package io.fluxreader.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderColors
@@ -103,4 +108,27 @@ internal fun SettingsSlider(
         thumb = { Box(Modifier.size(20.dp).background(if (enabled) colors.thumbColor else MaterialTheme.colorScheme.onSurface.copy(alpha = .38f), CircleShape)) },
         track = { state -> SliderDefaults.Track(sliderState = state, modifier = Modifier.height(6.dp), enabled = enabled, colors = colors,
             thumbTrackGapSize = 3.dp, drawStopIndicator = null) })
+}
+
+/** One navigation treatment for global settings and nested reader menus. */
+@Composable
+internal fun SettingsMenuRow(title: String, subtitle: String = "", onClick: () -> Unit) {
+    val themed = LocalFluxThemeMode.current.isExperimentalChrome
+    val pal = LocalExperimentalColors.current
+    Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+        color = if (themed) pal.background else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (themed) androidx.compose.foundation.BorderStroke(1.dp, pal.border.copy(alpha = .65f)) else null) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall,
+                    color = if (themed) pal.accent else MaterialTheme.colorScheme.onSurface)
+                if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+                tint = if (themed) pal.accent else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }

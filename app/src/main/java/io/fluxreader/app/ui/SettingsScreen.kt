@@ -177,7 +177,7 @@ private fun SettingsSectionTabs(
             ) {
                 Row(
                     Modifier.fillMaxWidth()
-                        .padding(horizontal = 36.dp)
+                        .padding(start = leadingRail, end = trailingRail)
                         .horizontalScroll(scrollState),
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
@@ -292,15 +292,6 @@ private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
     SectionTitle(Icons.Default.GridView, FluxIconRole.LIBRARY, "Библиотека")
     Text("Вид", style = MaterialTheme.typography.labelLarge)
     LibraryViewSelector(settings, viewModel)
-    Text(
-        when (settings.libraryViewMode) {
-            LibraryViewMode.GRID -> "Крупные обложки и подробные карточки."
-            LibraryViewMode.COMPACT -> "Больше книг на экране: маленькие обложки, название и тонкий прогресс."
-            LibraryViewMode.LIST -> "Список с автором, серией и прогрессом."
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     Text("Группировка", style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             LibraryGroupMode.entries.forEach { mode ->
@@ -317,19 +308,17 @@ private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
                 )
             }
     }
-    Text(
-        "Режим «Папки» повторяет структуру выбранного каталога и всех его подпапок. Одинаковая книга может отображаться в нескольких папках без создания дубликата файла.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    SettingsToggleRow("Продолжить", "Последняя читаемая книга в начале главной.", settings.libraryShowContinue) { enabled ->
+    if (settings.libraryGroupMode == LibraryGroupMode.FOLDER) {
+        Text(
+            "Папки повторяют структуру импортированного каталога.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    SettingsToggleRow("Продолжить", "", settings.libraryShowContinue) { enabled ->
         viewModel.updateSettings { it.copy(libraryShowContinue = enabled) }
     }
     SectionTitle(Icons.Default.Refresh, FluxIconRole.APPEARANCE, "Обложки")
-    Text(
-        "EPUB/FB2: встроенная обложка. PDF: первая страница. Если картинки нет — FluxReader создаёт аккуратную локальную обложку.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     OutlinedButton(onClick = viewModel::refreshBookCovers, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Default.Refresh, contentDescription = null)
         Text("  Обновить")
@@ -390,32 +379,31 @@ private fun SpeedSettings(settings: ReaderSettings, viewModel: AppViewModel) {
     }
     SettingsToggleRow(
         "Умная разбивка фраз",
-        "Не разрывает смысловой фрагмент посреди предложения.",
+        "",
         settings.speedSmartChunking,
     ) { enabled -> viewModel.updateSettings { it.copy(speedSmartChunking = enabled) } }
     SettingsToggleRow(
         "Микропаузы",
-        "Дополнительное время после предложений и смысловых разделителей.",
+        "На пунктуации и сложных словах.",
         settings.speedMicroPausesEnabled,
     ) { enabled -> viewModel.updateSettings { it.copy(speedMicroPausesEnabled = enabled) } }
     SettingsToggleRow(
         "Пауза между абзацами",
-        "Делает границу абзаца заметнее.",
+        "",
         settings.speedParagraphPause,
     ) { enabled -> viewModel.updateSettings { it.copy(speedParagraphPause = enabled) } }
     SettingsToggleRow(
         "Плавный разгон",
-        "После старта постепенно выходит на выбранный WPM.",
+        "",
         settings.speedGradualAcceleration,
     ) { enabled -> viewModel.updateSettings { it.copy(speedGradualAcceleration = enabled) } }
     SettingsToggleRow(
         "Автовозврат после паузы",
-        "После долгой паузы возвращается к началу смыслового фрагмента.",
+        "К началу предложения после долгой паузы.",
         settings.speedAutoRewindAfterPause,
     ) { enabled -> viewModel.updateSettings { it.copy(speedAutoRewindAfterPause = enabled) } }
     Text("Экспериментальные функции", style = MaterialTheme.typography.titleMedium)
     SpeedDialogueSettings(settings, viewModel::updateSettings)
-    Text("Расширенные визуальные настройки доступны кнопкой настройки прямо в Speed Reader.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
@@ -426,7 +414,7 @@ private fun OcrSettings(settings: ReaderSettings, viewModel: AppViewModel) {
         "Запускается только если в PDF нет встроенного текста.",
         settings.ocrEnabled,
     ) { enabled -> viewModel.updateSettings { it.copy(ocrEnabled = enabled) } }
-    Text("Языки Tesseract", style = MaterialTheme.typography.labelLarge)
+    Text("Языки распознавания", style = MaterialTheme.typography.labelLarge)
     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         listOf("rus", "ukr", "eng").forEach { language ->
             FilterChip(
@@ -445,15 +433,15 @@ private fun OcrSettings(settings: ReaderSettings, viewModel: AppViewModel) {
     }
     val installedOcr = remember { viewModel.installedOcrLanguages() }
     Text(
-        "Локальные модели: ${if (installedOcr.isEmpty()) "не вложены" else installedOcr.joinToString(" + ")}",
+        "Языковые модели: ${if (installedOcr.isEmpty()) "не установлены" else installedOcr.joinToString(" + ")}",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Text("Backend: ${viewModel.ocrBackendDescription()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    SettingsToggleRow("ML Kit fallback", "Latin OCR без дополнительных traineddata.", settings.ocrUseMlKitFallback) { enabled ->
+    Text("Распознавание: ${viewModel.ocrBackendDescription()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    SettingsToggleRow("Распознавание латиницы", "Без языковых моделей.", settings.ocrUseMlKitFallback) { enabled ->
         viewModel.updateSettings { it.copy(ocrUseMlKitFallback = enabled) }
     }
-    Text("Русский, украинский и английский OCR доступны в сборке с языковыми моделями. Без них используется распознавание латиницы.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Для русского и украинского нужны языковые модели.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
@@ -473,7 +461,7 @@ private fun AboutSettings(viewModel: AppViewModel) {
     GitHubUpdateControls(viewModel)
     HorizontalDivider()
     Text(
-        "Офлайн-читалка EPUB, FB2, FB2.ZIP, TXT и PDF с библиотекой и папками, гибким форматированием, полноэкранным и постраничным чтением, скорочтением, поиском, оглавлением и OCR для PDF-сканов.",
+        "Офлайн-читалка EPUB, FB2, TXT и PDF.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

@@ -30,6 +30,10 @@ import io.fluxreader.app.data.ReaderAnnotationsRepository
 import io.fluxreader.app.data.ReaderAnnotation
 import io.fluxreader.app.data.ReaderAnnotationKind
 import io.fluxreader.app.data.SpeedMode
+import io.fluxreader.app.reader.DialogueCorrection
+import io.fluxreader.app.reader.DialogueCorrectionStore
+import io.fluxreader.app.reader.DialogueReply
+import io.fluxreader.app.reader.DialogueReplyLocator
 import io.fluxreader.app.reader.BookContentRepository
 import io.fluxreader.app.reader.BookDialogueRepository
 import io.fluxreader.app.reader.ChapterDialogueIndex
@@ -119,6 +123,7 @@ data class SpeedUiState(
     val chapterIndex: Int = 0,
     val chapterText: String = "",
     val dialogueIndex: ChapterDialogueIndex? = null,
+    val dialogueCorrections: List<DialogueCorrection> = emptyList(),
     val dialogueAnalysisStatus: String? = null,
     val chunk: SpeedChunk? = null,
     val mediaCues: List<SpeedMediaCue> = emptyList(),
@@ -141,6 +146,7 @@ private data class LoadedSpeedChapter(
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    private val dialogueCorrectionStore = DialogueCorrectionStore(File(application.filesDir, "dialogue-corrections-v1"))
     private val updateManager = GitHubUpdateManager(application, viewModelScope)
     val githubUpdates = updateManager.state
     fun checkForUpdates() = updateManager.check()
@@ -1445,12 +1451,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             libraryRepository.updateMetadata(book.id, BookMetadata(outline.title, outline.author), outline.chapters.size)
             libraryRepository.touch(book.id)
 
+            val corrections = withContext(Dispatchers.IO) { dialogueCorrectionStore.read(bookId, loaded.chapterIndex, loaded.text) }
             if (_route.value == AppRoute.SPEED && _speed.value.bookId == bookId) {
                 _speed.value = SpeedUiState(
                     bookId = bookId,
                     outline = outline,
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
+                    dialogueCorrections = corrections,
                     dialogueIndex = null,
                     dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
@@ -1698,6 +1706,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun correctDialogueSpeaker(reply: DialogueReply, speaker: String?, automatic: Boolean = false) {
+        val captured = _speed.value
+        val bookId = captured.bookId ?: return
+        speedPause()
+        launchHandled(onError = { _message.value = it.userMessage("Не удалось сохранить говорящего") }) {
+            val corrections = withContext(Dispatchers.IO) {
+                dialogueCorrectionStore.update(bookId, captured.chapterIndex, captured.chapterText, reply, speaker, automatic)
+            }
+            val latest = _speed.value
+            if (latest.bookId == bookId && latest.chapterIndex == captured.chapterIndex && latest.chapterText == captured.chapterText) {
+                _speed.value = latest.copy(dialogueCorrections = corrections)
+            }
+        }
+    }
+
     fun speedRetry() {
         val bookId = _speed.value.bookId ?: return
         val preferred = _speed.value.chapterIndex.takeIf { it >= 0 }
@@ -1734,6 +1757,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             val loaded = findReadableSpeedChapter(book, outline, startChapter, offset, words)
                 ?: error("В следующих главах нет текста")
+            val corrections = withContext(Dispatchers.IO) { dialogueCorrectionStore.read(book.id, loaded.chapterIndex, loaded.text) }
             val latest = _speed.value
             if (_route.value == AppRoute.SPEED && latest.bookId == book.id) {
                 val history = historyOverride ?: (latest.history + listOfNotNull(appendHistory)).takeLast(256)
@@ -1741,6 +1765,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     loading = false,
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
+                    dialogueCorrections = corrections,
                     dialogueIndex = null,
                     dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
