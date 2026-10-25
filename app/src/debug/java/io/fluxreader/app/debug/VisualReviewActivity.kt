@@ -35,6 +35,7 @@ class VisualReviewActivity : ComponentActivity() {
             experimentalPalette = null,
             experimentalCrtEnabled = intent.getBooleanExtra("effects", false),
             speedDialogueEnabled = true,
+            speedDialogueBookAnalysis = intent.getBooleanExtra("bookAnalysis", false),
             speedSpeakerStyle = when (intent.getStringExtra("label")) { "text" -> SpeedSpeakerStyle.TEXT; "chip" -> SpeedSpeakerStyle.CHIP; else -> SpeedSpeakerStyle.BUBBLE },
             speedSpeakerFontSizeSp = intent.getIntExtra("nameSize", 24).toFloat(),
             speedSpeakerPosition = if (intent.getBooleanExtra("below", false)) SpeedSpeakerPosition.BELOW else SpeedSpeakerPosition.ABOVE,

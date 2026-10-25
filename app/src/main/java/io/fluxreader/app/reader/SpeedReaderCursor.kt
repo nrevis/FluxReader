@@ -367,11 +367,11 @@ object SpeedReaderCursor {
         val paragraphAfter = text.indexOf("\n\n", center)
         if (paragraphAfter >= 0 && paragraphAfter - center <= radius * 2) end = paragraphAfter
 
-        if (start > 0) {
+        if (start > 0 && !text[start - 1].isWhitespace()) {
             while (start < center && !text[start].isWhitespace()) start++
             while (start < center && text[start].isWhitespace()) start++
         }
-        if (end < text.length) {
+        if (end < text.length && !text[end].isWhitespace()) {
             while (end > center && !text[end - 1].isWhitespace()) end--
         }
         if (end <= start) {

@@ -631,9 +631,10 @@ private fun SpeedViewport(
             }
     ) {
         val density = LocalDensity.current
-        val dialogue = remember(state.chapterText, state.chunk?.startOffset, settings.speedDialogueEnabled) {
+        val dialogue = remember(state.chapterText, state.chunk?.startOffset, state.dialogueIndex, settings.speedDialogueEnabled, settings.speedDialogueBookAnalysis) {
             if (settings.speedDialogueEnabled) state.chunk?.let {
-                SpeedDialogueAnalyzer.at(state.chapterText, it.startOffset)
+                if (settings.speedDialogueBookAnalysis && state.dialogueIndex != null) state.dialogueIndex.at(it.startOffset)
+                else SpeedDialogueAnalyzer.at(state.chapterText, it.startOffset)
             } else null
         }
         val mainTextHeightPx = with(density) {
@@ -799,6 +800,7 @@ private fun SpeedViewport(
                     SpeedPausePreview(
                         chapterText = state.chapterText,
                         chunk = chunk,
+                        settings = settings,
                         textColor = textColor,
                         focusColor = focusColor,
                         onWordTap = viewModel::speedSeekToOffset,
@@ -944,6 +946,7 @@ private fun SpeedChapterIntro(
 private fun SpeedPausePreview(
     chapterText: String,
     chunk: io.fluxreader.app.reader.SpeedChunk,
+    settings: ReaderSettings,
     textColor: Color,
     focusColor: Color,
     onWordTap: (Int) -> Unit,
@@ -986,12 +989,12 @@ private fun SpeedPausePreview(
             val layoutHolder = remember(annotated) { arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1) }
             BasicText(
                 text = annotated,
-                modifier = Modifier.pointerInput(annotated, window.startOffset) {
+                modifier = Modifier.pointerInput(annotated, window.startOffset, settings.speedDialogueEnabled) {
                     detectTapGestures { position ->
                         val layout = layoutHolder[0] ?: return@detectTapGestures
                         val localOffset = layout.getOffsetForPosition(position).coerceIn(0, window.text.length)
-                        val word = SpeedReaderCursor.wordStartOffset(window.text, localOffset)
-                        onWordTap(window.startOffset + word)
+                        val word = SpeedDialoguePlayback.wordStartOffset(chapterText, window.startOffset + localOffset, settings)
+                        onWordTap(word)
                     }
                 },
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -1719,6 +1722,12 @@ private fun SpeedDialogueSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ModalSheetHeader("Эксперимент: диалоги", onBack = onBack, onClose = onDismiss)
+            val speedState by viewModel.speed.collectAsState()
+            if (settings.speedDialogueEnabled && settings.speedDialogueBookAnalysis) {
+                speedState.dialogueAnalysisStatus?.let { status ->
+                    Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             SpeedDialogueSettings(settings, viewModel::updateSettings)
         }
     }

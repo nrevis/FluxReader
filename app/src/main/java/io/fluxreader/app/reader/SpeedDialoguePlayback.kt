@@ -7,6 +7,14 @@ import io.fluxreader.app.data.SpeedMode
 object SpeedDialoguePlayback {
     private val words = Regex("[^\\s\\p{Zs}]+")
 
+    /** Resume inside a literary hyphen chain at the current part, preserving the saved position. */
+    fun wordStartOffset(text: String, offset: Int, config: ReaderSettings): Int {
+        val ordinary = SpeedReaderCursor.wordStartOffset(text, offset)
+        val candidate = offset.takeIf { it in text.indices && !text[it].isWhitespace() } ?: ordinary
+        val run = if (config.speedDialogueEnabled) SpeedDialogueHyphenRun.at(text, candidate) else null
+        return run?.pieces?.get(run.pieceIndex(candidate))?.first ?: ordinary
+    }
+
     fun readableOffset(text: String, offset: Int): Int {
         var cursor = offset.coerceIn(0, text.length)
         while (cursor < text.length) {
@@ -20,13 +28,17 @@ object SpeedDialoguePlayback {
 
     fun next(text: String, offset: Int, config: ReaderSettings, wordCount: Int): SpeedChunk? {
         val start = if (config.speedDialogueEnabled) readableOffset(text, offset) else offset
+        if (config.speedDialogueEnabled) SpeedDialogueHyphenRun.at(text, start)?.let { run ->
+            return run.chunk(text, start, if (config.speedMode == SpeedMode.RSVP) 1 else wordCount)
+        }
         if (config.speedDialogueEnabled && config.speedDialogueShortReplies && config.speedMode == SpeedMode.RSVP) {
             val span = SpeedDialogueAnalyzer.at(text, start)
             if (span != null && !span.continuation && readableOffset(text, span.start) == start) {
                 val end = text.substring(start, span.endExclusive).trimEnd().length + start
                 val reply = text.substring(start, end)
                 val tokens = words.findAll(reply).map { it.value }.filter { token -> token.any(Char::isLetterOrDigit) }.take(7).toList()
-                if (tokens.size in 2..6 && reply.lastOrNull() in listOf('.', '!', '?', '…', '»', '”')) {
+                val hasHyphenRun = words.findAll(reply).any { SpeedDialogueHyphenRun.at(text, start + it.range.first) != null }
+                if (!hasHyphenRun && tokens.size in 2..6 && reply.lastOrNull() in listOf('.', '!', '?', '…', '»', '”')) {
                     // Read the complete bounded reply. General smart chunking would break at
                     // its leading dash or first comma, defeating the short-reply mode.
                     return SpeedChunk(tokens, start, end, focusTokenIndex = 0)
@@ -48,7 +60,11 @@ object SpeedDialoguePlayback {
         }?.range?.first?.plus(start) ?: chunk.endOffset
         // EPUBs often glue a marker to punctuation ("Сир,- ответил..."). Its boundary
         // can lie inside a whitespace token, so token starts alone are insufficient.
-        val boundary = minOf(tokenBoundary, initial?.endExclusive ?: chunk.endOffset)
+        val hyphenBoundary = matches.firstOrNull { match ->
+            val at = start + match.range.first
+            at > start && SpeedDialogueHyphenRun.at(text, at) != null
+        }?.range?.first?.plus(start) ?: chunk.endOffset
+        val boundary = minOf(tokenBoundary, initial?.endExclusive ?: chunk.endOffset, hyphenBoundary)
         val tokens = words.findAll(text.substring(start, boundary)).map { it.value }
             .filter { it.any(Char::isLetterOrDigit) }.toList()
         return if (tokens.isEmpty()) chunk else chunk.copy(tokens = tokens, endOffset = boundary,

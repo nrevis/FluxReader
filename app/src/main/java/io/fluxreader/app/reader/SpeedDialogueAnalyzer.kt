@@ -39,6 +39,24 @@ object SpeedDialogueAnalyzer {
     // Only small paragraph strings are retained, never a chapter/book. Synchronised for UI/IO use.
     private val cache = LinkedHashMap<Pair<String, String>, List<SpeedDialogueSpan>>(16, .75f, true)
 
+    /** Linear chapter pass; used off the playback thread. Never changes original offsets. */
+    fun spans(text: String, checkpoint: () -> Unit = {}): List<SpeedDialogueSpan> {
+        val result = ArrayList<SpeedDialogueSpan>()
+        var begin = 0
+        var prefix = ""
+        while (begin < text.length) {
+            checkpoint()
+            val end = text.indexOf('\n', begin).let { if (it < 0) text.length else it }
+            val line = text.substring(begin, end)
+            if (line.length <= 4096 && line.isNotBlank()) {
+                result += parse(line, prefix).map { it.copy(start = it.start + begin, endExclusive = it.endExclusive + begin) }
+            }
+            if (line.isNotBlank()) prefix = line.takeLast(512).trimEnd()
+            begin = end + 1
+        }
+        return result
+    }
+
     fun at(text: String, offset: Int): SpeedDialogueSpan? {
         if (offset !in text.indices) return null
         var begin = offset

@@ -31,6 +31,8 @@ import io.fluxreader.app.data.ReaderAnnotation
 import io.fluxreader.app.data.ReaderAnnotationKind
 import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.reader.BookContentRepository
+import io.fluxreader.app.reader.BookDialogueRepository
+import io.fluxreader.app.reader.ChapterDialogueIndex
 import io.fluxreader.app.reader.ReaderMemoryBudget
 import io.fluxreader.app.reader.ChapterSpeedOffset
 import io.fluxreader.app.reader.ReaderProgressMath
@@ -116,6 +118,8 @@ data class SpeedUiState(
     val outline: BookOutline? = null,
     val chapterIndex: Int = 0,
     val chapterText: String = "",
+    val dialogueIndex: ChapterDialogueIndex? = null,
+    val dialogueAnalysisStatus: String? = null,
     val chunk: SpeedChunk? = null,
     val mediaCues: List<SpeedMediaCue> = emptyList(),
     val headingCues: List<SpeedHeadingCue> = emptyList(),
@@ -148,6 +152,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val libraryRepository = LibraryRepository(application)
     private val settingsRepository = ReaderSettingsRepository(application)
     private val contentRepository = BookContentRepository(application)
+    private val bookDialogueRepository = BookDialogueRepository(application.cacheDir, contentRepository)
     private val annotationsRepository = ReaderAnnotationsRepository(application)
     private val memoryClassMb = application.getSystemService(ActivityManager::class.java)?.memoryClass ?: 256
     private val imageCacheMaxKb = ReaderMemoryBudget.embeddedImageCacheKb(memoryClassMb)
@@ -214,6 +219,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var readerJob: Job? = null
     private var readerPrefetchJob: Job? = null
     private var speedJob: Job? = null
+    private var bookDialogueJob: Job? = null
+    private var bookDialogueGeneration = 0L
     private var speedPausedAtRealtimeMs: Long = 0L
     private var pdfJob: Job? = null
     private var pdfRenderGeneration: Long = 0L
@@ -349,6 +356,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         readerPrefetchJob?.cancel()
         cancelPdfRender()
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         searchJob?.cancel()
         releaseRouteStatesForLibrary()
         _route.value = AppRoute.LIBRARY
@@ -376,6 +384,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun consumeNarratorLaunchRequest() { _narratorLaunchRequest.value = false }
 
     fun showAudiobooks() {
+        cancelBookDialogueAnalysis()
         if (_route.value == AppRoute.SPEED) speedPause()
         _route.value = AppRoute.AUDIOBOOKS
     }
@@ -401,6 +410,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun showSettings() {
+        cancelBookDialogueAnalysis()
         speedPause()
         if (_route.value != AppRoute.SETTINGS) routeBeforeSettings = _route.value
         _route.value = AppRoute.SETTINGS
@@ -412,6 +422,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         when (current) {
             AppRoute.SPEED -> {
                 speedJob?.cancel()
+                cancelBookDialogueAnalysis()
                 speedPause()
                 if (destination == AppRoute.READER) {
                     restoreReaderFromSpeedPosition()
@@ -436,6 +447,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             AppRoute.SETTINGS, AppRoute.LIBRARY -> Unit
         }
         _route.value = destination
+        if (destination == AppRoute.SPEED) scheduleBookDialogueAnalysis()
     }
 
     private fun publishImportProgress(
@@ -803,6 +815,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         cancelPdfRender()
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         speedPause()
         readerJob?.cancel()
         readerPrefetchJob?.cancel()
@@ -1156,6 +1169,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         readerJob?.cancel()
         readerPrefetchJob?.cancel()
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         speedPause()
         cancelPdfRender()
         _route.value = AppRoute.PDF
@@ -1257,6 +1271,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun restoreReaderFromSpeedPosition() {
+        cancelBookDialogueAnalysis()
         val speedState = _speed.value
         val bookId = speedState.bookId ?: run {
             _route.value = AppRoute.READER
@@ -1385,6 +1400,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         readerPrefetchJob?.cancel()
         cancelPdfRender()
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         // A fresh Speed Reader session starts at its stored word.  Do not reuse
         // the previous session's elapsed pause time: auto-rewind would otherwise
         // jump to the start of an old/possibly very long sentence on first Play.
@@ -1435,6 +1451,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     outline = outline,
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
+                    dialogueIndex = null,
+                    dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
                     mediaCues = loaded.mediaCues,
                     headingCues = loaded.headingCues,
@@ -1443,7 +1461,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     mediaResumePending = false,
                     status = null,
                 )
-                saveSpeedProgress(_speed.value, loaded.chunk.startOffset)
+                // Ready-state collectors may already have sought to a newer word. Persist the
+                // displayed cursor instead of overwriting it with the initial load offset.
+                val published = _speed.value
+                published.chunk?.let { saveSpeedProgress(published, it.startOffset) }
+                scheduleBookDialogueAnalysis()
             }
         }
     }
@@ -1695,6 +1717,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val words = wordsForMode(settings.value.speedMode, settings.value.speedWordsPerFixation)
 
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         _speed.value = initial.copy(loading = true, status = "Открываю следующий фрагмент…", error = null, playing = if (forcePause) false else initial.playing)
         speedJob = launchHandled(
             onError = { error ->
@@ -1718,6 +1741,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     loading = false,
                     chapterIndex = loaded.chapterIndex,
                     chapterText = loaded.text,
+                    dialogueIndex = null,
+                    dialogueAnalysisStatus = null,
                     chunk = loaded.chunk,
                     mediaCues = loaded.mediaCues,
                     headingCues = loaded.headingCues,
@@ -1729,7 +1754,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     error = null,
                     playing = if (forcePause) false else latest.playing,
                 )
-                saveSpeedProgress(_speed.value, loaded.chunk.startOffset)
+                // Ready-state collectors may already have sought to a newer word. Persist the
+                // displayed cursor instead of overwriting it with the initial load offset.
+                val published = _speed.value
+                published.chunk?.let { saveSpeedProgress(published, it.startOffset) }
+                scheduleBookDialogueAnalysis()
             }
         }
     }
@@ -1763,8 +1792,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val text = document.text
             val requestedStart = if (index == startChapter) offset.coerceIn(0, text.length) else 0
             val semanticStart = document.readableOffset(requestedStart)
-            val start = SpeedReaderCursor.wordStartOffset(text, semanticStart)
             val config = settings.value
+            val start = SpeedDialoguePlayback.wordStartOffset(text, semanticStart, config)
             val chunk = SpeedDialoguePlayback.next(text, start, config, words)
             if (chunk != null) return LoadedSpeedChapter(index, text, chunk, document.mediaCues, document.headingCues)
             index++
@@ -1957,6 +1986,66 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 error = if (rebuilt == null && state.chapterText.isNotBlank()) "Нет текста для текущего режима" else null,
             )
         }
+        if (_route.value == AppRoute.SPEED &&
+            (before.speedDialogueEnabled != after.speedDialogueEnabled ||
+                before.speedDialogueBookAnalysis != after.speedDialogueBookAnalysis)) {
+            scheduleBookDialogueAnalysis()
+        }
+    }
+
+    private fun cancelBookDialogueAnalysis() {
+        bookDialogueGeneration++
+        bookDialogueJob?.cancel()
+        bookDialogueJob = null
+    }
+
+    private fun scheduleBookDialogueAnalysis() {
+        cancelBookDialogueAnalysis()
+        val state = _speed.value
+        val config = settings.value
+        if (_route.value != AppRoute.SPEED || !config.speedDialogueEnabled || !config.speedDialogueBookAnalysis) {
+            _speed.value = state.copy(dialogueIndex = null, dialogueAnalysisStatus = null)
+            return
+        }
+        val book = state.bookId?.let(libraryRepository::find) ?: return
+        val outline = state.outline ?: return
+        if (book.format == BookFormat.PDF) {
+            _speed.value = state.copy(dialogueAnalysisStatus = "Анализ всей книги пока доступен для EPUB, FB2 и TXT")
+            return
+        }
+        val generation = bookDialogueGeneration
+        bookDialogueJob = viewModelScope.launch {
+            try {
+                val displayedFingerprint = withContext(Dispatchers.Default) {
+                    ChapterDialogueIndex.fingerprint(state.chapterText)
+                }
+                bookDialogueRepository.analyze(book, outline, state.chapterIndex,
+                    onChapter = { chapter, index ->
+                        withContext(Dispatchers.Main.immediate) {
+                            val latest = _speed.value
+                            if (generation == bookDialogueGeneration && _route.value == AppRoute.SPEED &&
+                                latest.bookId == book.id && !latest.loading && latest.chapterIndex == chapter &&
+                                index.textFingerprint == displayedFingerprint) {
+                                _speed.value = latest.copy(dialogueIndex = index)
+                            }
+                        }
+                    },
+                    onProgress = { progress ->
+                        withContext(Dispatchers.Main.immediate) {
+                            if (generation == bookDialogueGeneration && _route.value == AppRoute.SPEED && _speed.value.bookId == book.id) {
+                                _speed.value = _speed.value.copy(dialogueAnalysisStatus = progress.label)
+                            }
+                        }
+                    },
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == bookDialogueGeneration && _route.value == AppRoute.SPEED && _speed.value.bookId == book.id) {
+                    _speed.value = _speed.value.copy(dialogueAnalysisStatus = "Не удалось завершить анализ. Базовая маркировка доступна.")
+                }
+            }
+        }
     }
 
     private fun speedChunkAt(
@@ -2009,6 +2098,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         readerJob?.cancel()
         cancelPdfRender()
         speedJob?.cancel()
+        cancelBookDialogueAnalysis()
         searchJob?.cancel()
         importJob?.cancel()
         _pdf.value.bitmap?.let { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }

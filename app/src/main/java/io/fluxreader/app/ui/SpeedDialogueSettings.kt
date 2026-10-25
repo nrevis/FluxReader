@@ -38,13 +38,18 @@ internal fun SpeedDialogueSettings(
         ) { value -> onUpdate { it.copy(speedDialogueEnabled = value) } }
         if (settings.speedDialogueEnabled) {
             SettingsToggleRow(
+                title = "Анализ всей книги (эксперимент)",
+                subtitle = "В фоне собирает имена и ищет говорящих по словам автора перед репликой. EPUB, FB2 и TXT; без сети. Чтение доступно сразу.",
+                checked = settings.speedDialogueBookAnalysis,
+            ) { value -> onUpdate { it.copy(speedDialogueBookAnalysis = value) } }
+            SettingsToggleRow(
                 title = "Маркер прямой речи",
                 subtitle = "Показывает «Прямая речь», когда имя неизвестно или скрыто.",
                 checked = settings.speedDialogueIndicator,
             ) { value -> onUpdate { it.copy(speedDialogueIndicator = value) } }
             SettingsToggleRow(
                 title = "Имя говорящего",
-                subtitle = "Показывает имя при явном указании в тексте. Если имя неизвестно, используется маркер прямой речи.",
+                subtitle = "Показывает определённого говорящего. Если имя неизвестно, используется маркер прямой речи.",
                 checked = settings.speedDialogueNames,
             ) { value -> onUpdate { it.copy(speedDialogueNames = value) } }
             if (settings.speedDialogueNames || settings.speedDialogueIndicator) {
@@ -104,7 +109,7 @@ internal fun SpeedDialogueSettings(
             }
             Text(
                 "Тире, кавычки и реплики со словами автора внутри. " +
-                    "Если говорящий не указан в тексте, приложение не пытается угадать его.",
+                    "Анализ книги использует явно названных персонажей и ближайшее введение реплики. Неоднозначные случаи остаются без имени.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

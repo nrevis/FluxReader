@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.99",
-  "versionCode": 20116,
+  "versionName": "0.2.0-alpha.100",
+  "versionCode": 20117,
   "line": "0.2-clean-rewrite",
-  "focus": "dialogue-indicator-and-responsive-layout"
+  "focus": "experimental-offline-whole-book-dialogue-analysis"
 }

@@ -66,6 +66,7 @@ class ReaderSettingsRepository(context: Context) {
             .putString("speedModeV2", next.speedMode.name)
             .putBoolean("speedDialogueEnabledV1", next.speedDialogueEnabled)
             .putBoolean("speedDialogueNamesV1", next.speedDialogueNames)
+            .putBoolean("speedDialogueBookAnalysisV1", next.speedDialogueBookAnalysis)
             .putBoolean("speedDialogueIndicatorV1", next.speedDialogueIndicator)
             .putString("speedSpeakerStyleV1", next.speedSpeakerStyle.name)
             .putString("speedSpeakerPositionV1", next.speedSpeakerPosition.name)
@@ -228,6 +229,7 @@ class ReaderSettingsRepository(context: Context) {
                 speedMode = speedMode,
                 speedDialogueEnabled = prefs.getBoolean("speedDialogueEnabledV1", false),
                 speedDialogueNames = prefs.getBoolean("speedDialogueNamesV1", true),
+                speedDialogueBookAnalysis = prefs.getBoolean("speedDialogueBookAnalysisV1", false),
                 speedDialogueIndicator = prefs.getBoolean("speedDialogueIndicatorV1", true),
                 speedSpeakerStyle = runCatching { SpeedSpeakerStyle.valueOf(prefs.getString("speedSpeakerStyleV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerStyle.BUBBLE),
                 speedSpeakerPosition = runCatching { SpeedSpeakerPosition.valueOf(prefs.getString("speedSpeakerPositionV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerPosition.ABOVE),
