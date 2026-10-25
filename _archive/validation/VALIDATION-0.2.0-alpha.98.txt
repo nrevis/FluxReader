@@ -1,7 +1,7 @@
 Flux Reader 0.2.0-alpha.98 — validation 2026-10-25
 
 Version: 0.2.0-alpha.98 / Android versionCode 20115.
-Local preview build; no GitHub publication performed for this iteration.
+Release candidate verified locally before GitHub publication.
 
 PASS :app:testDebugUnitTest — 40 suites, 168 tests, 0 failures/errors/skips.
 PASS :app:assembleDebug and :app:assembleRelease, including lintVitalRelease.
