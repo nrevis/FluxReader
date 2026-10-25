@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="480" viewBox="0 0 1600 480" role="img" aria-label="Flux Reader — читайте, ускоряйтесь, слушайте">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101821"/><stop offset="1" stop-color="#131b2c"/></linearGradient><linearGradient id="a" x2="1" y2="1"><stop stop-color="#b9c6ff"/><stop offset="1" stop-color="#70dce6"/></linearGradient></defs>
+<rect width="1600" height="480" rx="28" fill="url(#bg)"/>
+<path d="M1120 0v480M1200 0v480M1280 0v480M1360 0v480M1440 0v480M1520 0v480M1040 80h560M1040 160h560M1040 240h560M1040 320h560M1040 400h560" stroke="#718298" stroke-opacity=".07"/>
+<circle cx="1350" cy="240" r="154" fill="none" stroke="#67d1db" stroke-opacity=".18"/><circle cx="1350" cy="240" r="116" fill="none" stroke="#b9c6ff" stroke-opacity=".23"/>
+<g transform="translate(76 88) scale(1.05)"><rect width="108" height="108" rx="24" fill="#263343"/><path fill="#e8eaed" d="M18 18h31c8 0 14 3 19 8v58c-5-5-11-7-19-7H18z"/><path fill="#b9c6ff" d="M90 18H59c-8 0-14 3-19 8v58c5-5 11-7 19-7h31z"/><path fill="#182331" d="M50 27h8v49h-8z"/></g>
+<text x="76" y="272" fill="#f3f6fa" font-family="Arial, sans-serif" font-size="76" font-weight="700" letter-spacing="-2">Flux Reader</text>
+<text x="78" y="327" fill="#b5c5d4" font-family="Arial, sans-serif" font-size="30">Ваша библиотека. Ваш темп. Ваш голос.</text>
+<text x="80" y="409" fill="#8397aa" font-family="Arial, sans-serif" font-size="20" letter-spacing="2">ANDROID · EPUB · FB2 · TXT · PDF</text>
+<path d="M1190 240h66l25-44 35 89 34-73 25 28h134" fill="none" stroke="url(#a)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1350" cy="86" r="6" fill="#ffc16b"/><circle cx="1196" cy="240" r="5" fill="#b9c6ff"/>
+<text x="1350" y="438" text-anchor="middle" fill="#8fa6ba" font-family="Arial, sans-serif" font-size="18" letter-spacing="3">READ · FOCUS · LISTEN</text>
+</svg>

@@ -1,9 +1,0 @@
-Flux Reader 0.2.0-alpha.58 validation
-
-Expected guards:
-- 30 custom experimental-theme vector drawable resources (15 Wasteland + 15 Cyberpunk).
-- wasteland_surface_texture.png and cyberpunk_surface_texture.png exist.
-- ThemeChrome.kt provides theme-local icon routing and preview.
-- ExperimentalUiOverlay.kt loads both texture overlays and remains pointer-input free.
-- Wasteland/Cyberpunk theme persistence names are unchanged for upgrade compatibility.
-- versionName 0.2.0-alpha.58 / versionCode 20075.

@@ -1,5 +1,0 @@
-# Keep historical changelogs out of any future GitHub Pages/Jekyll publication.
-exclude:
-  - _archive
-  - CHANGELOG*
-  - changelog*

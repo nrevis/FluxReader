@@ -8,7 +8,7 @@ SERIAL="emulator-5580"
 SCENE="${1:-settings}"
 THEME="${2:-wasteland}"
 export ANDROID_AVD_HOME="${FLUX_REVIEW_AVD_HOME:-${ANDROID_AVD_HOME:-$HOME/.android/avd}}"
-[[ -x "$ADB" && -x "$EMU" ]] || { echo "Нужны Android Emulator и platform-tools. См. VISUAL-REVIEW.md"; exit 2; }
+[[ -x "$ADB" && -x "$EMU" ]] || { echo "Нужны Android Emulator и platform-tools. См. docs/engineering/VISUAL-REVIEW.md"; exit 2; }
 mkdir -p dist/visual-review
 if ! "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
   nohup "$EMU" -avd FluxReaderVisual -port 5580 -no-snapshot -no-boot-anim -no-audio -gpu host -memory 2048 \
