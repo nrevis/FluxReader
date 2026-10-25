@@ -66,6 +66,13 @@ class ReaderSettingsRepository(context: Context) {
             .putString("speedModeV2", next.speedMode.name)
             .putBoolean("speedDialogueEnabledV1", next.speedDialogueEnabled)
             .putBoolean("speedDialogueNamesV1", next.speedDialogueNames)
+            .putString("speedSpeakerStyleV1", next.speedSpeakerStyle.name)
+            .putString("speedSpeakerPositionV1", next.speedSpeakerPosition.name)
+            .putString("speedSpeakerColorV1", next.speedSpeakerColor.name)
+            .putFloat("speedSpeakerFontSizeSpV1", next.speedSpeakerFontSizeSp)
+            .putBoolean("speedSpeakerBoldV1", next.speedSpeakerBold)
+            .putFloat("speedSpeakerBackgroundAlphaV1", next.speedSpeakerBackgroundAlpha)
+            .putFloat("speedSpeakerGapDpV1", next.speedSpeakerGapDp)
             .putBoolean("speedDialogueShortRepliesV1", next.speedDialogueShortReplies)
             .putBoolean("speedDialoguePauseEnabledV1", next.speedDialoguePauseEnabled)
             .putInt("speedDialoguePauseMsV1", next.speedDialoguePauseMs)
@@ -220,6 +227,13 @@ class ReaderSettingsRepository(context: Context) {
                 speedMode = speedMode,
                 speedDialogueEnabled = prefs.getBoolean("speedDialogueEnabledV1", false),
                 speedDialogueNames = prefs.getBoolean("speedDialogueNamesV1", true),
+                speedSpeakerStyle = runCatching { SpeedSpeakerStyle.valueOf(prefs.getString("speedSpeakerStyleV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerStyle.BUBBLE),
+                speedSpeakerPosition = runCatching { SpeedSpeakerPosition.valueOf(prefs.getString("speedSpeakerPositionV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerPosition.ABOVE),
+                speedSpeakerColor = runCatching { SpeedSpeakerColor.valueOf(prefs.getString("speedSpeakerColorV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerColor.CHARACTER),
+                speedSpeakerFontSizeSp = prefs.getFloat("speedSpeakerFontSizeSpV1", 20f),
+                speedSpeakerBold = prefs.getBoolean("speedSpeakerBoldV1", true),
+                speedSpeakerBackgroundAlpha = prefs.getFloat("speedSpeakerBackgroundAlphaV1", .16f),
+                speedSpeakerGapDp = prefs.getFloat("speedSpeakerGapDpV1", 20f),
                 speedDialogueShortReplies = prefs.getBoolean("speedDialogueShortRepliesV1", true),
                 speedDialoguePauseEnabled = prefs.getBoolean("speedDialoguePauseEnabledV1", true),
                 speedDialoguePauseMs = prefs.getInt("speedDialoguePauseMsV1", 220),
@@ -318,6 +332,9 @@ class ReaderSettingsRepository(context: Context) {
         pageTurnDurationMs = value.pageTurnDurationMs.coerceIn(80, 700),
         fullscreenTransitionDurationMs = value.fullscreenTransitionDurationMs.coerceIn(100, 600),
         speedDialoguePauseMs = value.speedDialoguePauseMs.coerceIn(0, 500),
+        speedSpeakerFontSizeSp = value.speedSpeakerFontSizeSp.takeIf { it.isFinite() }?.coerceIn(12f, 40f) ?: 20f,
+        speedSpeakerGapDp = value.speedSpeakerGapDp.takeIf { it.isFinite() }?.coerceIn(12f, 64f) ?: 20f,
+        speedSpeakerBackgroundAlpha = value.speedSpeakerBackgroundAlpha.takeIf { it.isFinite() }?.coerceIn(0f, .5f) ?: .16f,
         speedWpm = value.speedWpm.coerceIn(100, 3000),
         speedWordsPerFixation = value.speedWordsPerFixation.coerceIn(1, 7),
         speedSentencePauseMs = value.speedSentencePauseMs.coerceIn(0, 700),

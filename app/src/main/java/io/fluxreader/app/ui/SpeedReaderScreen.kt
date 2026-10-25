@@ -97,11 +97,14 @@ import io.fluxreader.app.data.ReaderSettings
 import io.fluxreader.app.data.ReaderThemeMode
 import io.fluxreader.app.data.useWastelandDesign
 import io.fluxreader.app.data.useCyberpunkDesign
+import io.fluxreader.app.data.SpeedSpeakerPosition
+import io.fluxreader.app.data.SpeedSpeakerStyle
 import io.fluxreader.app.data.SpeedFocusStyle
 import io.fluxreader.app.data.SpeedLowerSegmentMode
 import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.data.SpeedPacingMode
 import io.fluxreader.app.data.SpeedProgressMode
+import io.fluxreader.app.reader.SpeedDialoguePlayback
 import io.fluxreader.app.reader.SpeedDialogueAnalyzer
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SpeedSpeechCheckpointPolicy
@@ -364,7 +367,7 @@ fun SpeedReaderScreen(
             // The system bars are hidden. Reserve only the actual top camera
             // cutout, never the full safeDrawing/status/navigation band.
             Modifier.fillMaxSize().background(background)
-                .padding(top = ImmersiveCameraClearance.current())
+                .padding(DeviceEdgeClearance.immersivePadding())
         ) {
             if (settings.speedShowProgress) {
                 SpeedProgress(displayState, displaySettings, focusColor, textColor)
@@ -629,43 +632,58 @@ private fun SpeedViewport(
             } else null
         }
         val mainTextHeightPx = with(density) {
-            (settings.speedFontSizeSp * settings.speedLineHeightMultiplier * settings.speedMaxLines.coerceAtLeast(1)).sp.toPx()
+            (settings.speedFontSizeSp * settings.speedLineHeightMultiplier).sp.toPx() * settings.speedMaxLines.coerceAtLeast(1)
         }
         val mainHalfHeightPx = mainTextHeightPx / 2f
         val segmentFontSp = (settings.speedFontSizeSp * 0.28f).coerceIn(13f, 20f)
         val persistentHeightPx = if (settings.speedLowerSegmentMode == SpeedLowerSegmentMode.OFF) 0f else with(density) {
-            (segmentFontSp * 1.30f * 2f).sp.toPx() + 10.dp.toPx()
+            (segmentFontSp * 1.30f).sp.toPx() * 2f + 10.dp.toPx()
         }
         // Reserve pause context even while playback is running so pressing Pause never moves the
         // fixation point. The active word remains spatially stable in every UI state.
         val pauseContextHeightPx = if (
             settings.speedPauseContextEnabled && settings.speedLowerSegmentMode != SpeedLowerSegmentMode.CONTEXT
-        ) with(density) { 42.sp.toPx() + 12.dp.toPx() } else 0f
+        ) with(density) { 21.sp.toPx() * 2f + 12.dp.toPx() } else 0f
         // Reserve the pause preview even while playback is running. This keeps the ORP perfectly
         // stationary when a tap pauses reading and prevents the full-text card from covering it.
         val pausePreviewReservePx = if (settings.speedShowPausePreview) with(density) {
             (if (immersiveMode) 110.dp else 140.dp).toPx()
         } else 0f
-        val topClearancePx = with(density) { (if (settings.speedDialogueEnabled) 84.dp else 24.dp).toPx() }
+        // Reserve the same name slot throughout a chapter: names appearing/disappearing must
+        // never move the fixation. Two lines accommodate long names and system font scaling.
+        val speakerMeasurer = rememberTextMeasurer()
+        val speakerStyle = speedSpeakerTextStyle(settings)
+        val speakerTextHeight = speakerMeasurer.measure(AnnotatedString("Аг\nАг"), style = speakerStyle, maxLines = 2).size.height
+        val speakerSlotPx = if (settings.speedDialogueEnabled && settings.speedDialogueNames) with(density) {
+            // Measure two actual lines: Android's nonlinear font scaling means 100.sp is not
+            // necessarily twice 50.sp. Multiplying before conversion truncated the second line.
+            speakerTextHeight + (18f + if (settings.speedSpeakerStyle == SpeedSpeakerStyle.BUBBLE) 8f else 0f).dp.toPx()
+        } else 0f
+        val speakerReservePx = if (speakerSlotPx > 0f) speakerSlotPx + with(density) { settings.speedSpeakerGapDp.dp.toPx() } else 0f
+        val speakerBelow = settings.speedSpeakerPosition == SpeedSpeakerPosition.BELOW
+        val speakerLowerPx = if (speakerBelow) speakerReservePx else 0f
+        val topClearancePx = with(density) { 24.dp.toPx() }
         val lowerSegmentReservePx = persistentHeightPx + pauseContextHeightPx + with(density) {
             (if (persistentHeightPx > 0f || pauseContextHeightPx > 0f) 22.dp else 0.dp).toPx()
         }
-        val lowerContentReservePx = maxOf(lowerSegmentReservePx, pausePreviewReservePx)
+        val lowerContentReservePx = maxOf(lowerSegmentReservePx + speakerLowerPx, pausePreviewReservePx + speakerLowerPx)
         val viewportHeightPx = with(density) { maxHeight.toPx().coerceAtLeast(1f) }
         val effectiveVerticalPosition = SpeedViewportGeometry.clampFixationFraction(
             requestedFraction = settings.speedVerticalPosition,
             viewportHeightPx = viewportHeightPx,
             mainHalfHeightPx = mainHalfHeightPx,
             edgeClearancePx = topClearancePx,
+            upperContentReservePx = if (speakerBelow) 0f else speakerReservePx,
             lowerContentReservePx = lowerContentReservePx,
         )
         val yOffset = maxHeight * (effectiveVerticalPosition - 0.5f)
         val mainHalfHeightDp = with(density) { mainHalfHeightPx.toDp() }
         val persistentHeightDp = with(density) { persistentHeightPx.toDp() }
         val pauseContextHeightDp = with(density) { pauseContextHeightPx.toDp() }
-        val persistentOffset = mainHalfHeightDp + 22.dp + persistentHeightDp * 0.5f
+        val speakerLowerDp = with(density) { speakerLowerPx.toDp() }
+        val persistentOffset = mainHalfHeightDp + speakerLowerDp + 22.dp + persistentHeightDp * 0.5f
         val pauseContextOffset = when (settings.speedLowerSegmentMode) {
-            SpeedLowerSegmentMode.OFF -> mainHalfHeightDp + 22.dp + pauseContextHeightDp * 0.5f
+            SpeedLowerSegmentMode.OFF -> mainHalfHeightDp + speakerLowerDp + 22.dp + pauseContextHeightDp * 0.5f
             SpeedLowerSegmentMode.CURRENT -> persistentOffset + persistentHeightDp * 0.5f + 12.dp + pauseContextHeightDp * 0.5f
             SpeedLowerSegmentMode.CONTEXT -> persistentOffset
         }
@@ -678,7 +696,7 @@ private fun SpeedViewport(
                 horizontalFocusPosition = settings.speedHorizontalFocusFraction,
                 mainHalfHeightPx = mainHalfHeightPx,
                 lowerContentReservePx = lowerContentReservePx,
-                hasSpeakerLabel = dialogue?.speaker != null && settings.speedDialogueNames,
+                hasSpeakerLabel = settings.speedDialogueEnabled && settings.speedDialogueNames,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -732,24 +750,17 @@ private fun SpeedViewport(
             state.chunk != null -> {
                 val chunk = state.chunk
                 if (dialogue?.speaker != null && settings.speedDialogueNames) {
-                    val speakerPalette = listOf(
-                        Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A),
-                        Color(0xFFA8D9A0), Color(0xFFEBADD4),
-                    )
-                    val speakerColor = speakerPalette[
-                        (dialogue.speaker.lowercase().hashCode() and Int.MAX_VALUE) % speakerPalette.size
-                    ]
-                    // A quiet name label has its own space above the guide and the fixation.
-                    Text(
-                        text = dialogue.speaker,
-                        color = speakerColor,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.align(Alignment.Center)
-                            .offset(y = yOffset - mainHalfHeightDp - 38.dp)
-                            .padding(horizontal = 12.dp),
-                    )
+                    val slotDp = with(density) { speakerSlotPx.toDp() }
+                    val labelOffset = mainHalfHeightDp + settings.speedSpeakerGapDp.dp + slotDp / 2
+                    Box(Modifier.align(Alignment.Center).fillMaxWidth().height(slotDp)
+                        .offset(y = yOffset + if (speakerBelow) labelOffset else -labelOffset),
+                        contentAlignment = if (speakerBelow) Alignment.TopCenter else Alignment.BottomCenter) {
+                        SpeedSpeakerLabel(dialogue.speaker, settings, background = when {
+                            settings.useWastelandDesign || settings.useCyberpunkDesign -> LocalExperimentalColors.current.background
+                            settings.speedUseReaderTheme -> MaterialTheme.colorScheme.background
+                            else -> Color(settings.speedBackgroundColorArgb)
+                        }, accent = focusColor, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
                 }
                 SpeedChunkText(
                     state = state,
@@ -1014,7 +1025,7 @@ private fun SpeedFocusGuide(
         // not let guide lines collide with readable text.
         val gapTop = (centerY - mainHalfHeightPx - clearance).coerceAtLeast(top)
         val gapBottom = (centerY + mainHalfHeightPx + clearance + lowerContentReservePx).coerceAtMost(bottom)
-        if (gapTop > top && !hasSpeakerLabel) {
+        if (gapTop > top && !(hasSpeakerLabel && settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE)) {
             drawLine(guideColor, Offset(centerX, top), Offset(centerX, gapTop), strokeWidth = stroke)
         }
         if (bottom > gapBottom) {
@@ -1022,7 +1033,7 @@ private fun SpeedFocusGuide(
         }
         if (settings.speedShowFocusTicks) {
             val tick = 8.dp.toPx()
-            if (gapTop > top) {
+            if (gapTop > top && !(hasSpeakerLabel && settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE)) {
                 drawLine(guideColor, Offset(centerX - tick, gapTop), Offset(centerX + tick, gapTop), strokeWidth = stroke)
             }
             if (bottom > gapBottom) {
@@ -1396,8 +1407,9 @@ private fun RsvpWord(
         )
 
         if (settings.speedReedyFlowEnabled && settings.speedPeripheralWords > 0) {
-            val following = remember(chapterText, chunkEndOffset, settings.speedPeripheralWords) {
-                SpeedReaderCursor.followingTokens(chapterText, chunkEndOffset, settings.speedPeripheralWords)
+            val following = remember(chapterText, chunkEndOffset, settings.speedPeripheralWords, settings.speedDialogueEnabled) {
+                val previewOffset = if (settings.speedDialogueEnabled) SpeedDialoguePlayback.readableOffset(chapterText, chunkEndOffset) else chunkEndOffset
+                SpeedReaderCursor.followingTokens(chapterText, previewOffset, settings.speedPeripheralWords)
             }
             if (following.isNotEmpty()) {
                 val gapPx = with(density) { 14.dp.toPx() }

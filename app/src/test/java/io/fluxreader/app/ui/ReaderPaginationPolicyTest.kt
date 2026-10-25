@@ -141,4 +141,23 @@ class ReaderPaginationPolicyTest {
         assertEquals(500f, SpeedViewportGeometry.horizontalFocusPx(1000f, 0.90f), 0.001f)
     }
 
+    @Test fun speakerSlotLeavesRoomForLargeAccessibleName() {
+        // 40 sp, 130% font scaling, two lines plus bubble/tail/gap.
+        val reserve = 40f * 1.3f * 1.25f * 2f + 24f + 20f
+        val position = SpeedViewportGeometry.clampFixationFraction(
+            requestedFraction = .12f, viewportHeightPx = 900f, mainHalfHeightPx = 70f,
+            edgeClearancePx = 24f, lowerContentReservePx = 160f, upperContentReservePx = reserve)
+        assertTrue(position * 900f - 70f - reserve >= 24f)
+        assertTrue(position * 900f + 70f + 160f <= 876f)
+    }
+
+    @Test fun hardwareCornersHaveSafeFallbackAndUseReportedRadius() {
+        assertEquals(20f, DeviceEdgeClearance.cornerGuardDp(0f), .001f)
+        assertEquals(20f, DeviceEdgeClearance.cornerGuardDp(Float.NaN), .001f)
+        assertEquals(36f, DeviceEdgeClearance.cornerGuardDp(72f), .001f)
+        // At the guard inset on both axes, the point is inside the corner circle.
+        val guard = DeviceEdgeClearance.cornerGuardDp(72f)
+        assertTrue(2f * (72f - guard) * (72f - guard) <= 72f * 72f)
+    }
+
 }

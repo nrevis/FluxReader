@@ -1,6 +1,6 @@
 # Визуальная проверка Flux Reader до релиза
 
-Локальная проверочная версия: **0.2.0-alpha.97**, Android versionCode **20114**.
+Локальная проверочная версия: **0.2.0-alpha.98**, Android versionCode **20115**.
 
 Настоящий интерфейс проверяется в отладочной сборке на Android-эмуляторе. Полная release-сборка и публикация выполняются после просмотра экранов. Совсем без компиляции можно показать только макет; он не доказывает, как работает приложение.
 
@@ -12,6 +12,8 @@
 scripts/visual-review.command settings wasteland
 scripts/visual-review.command short wasteland
 scripts/visual-review.command long wasteland
+scripts/visual-review.command interrupted wasteland
+scripts/visual-review.command prefix wasteland
 scripts/visual-review.command ellipsis wasteland
 scripts/visual-review.command settings cyberpunk
 scripts/visual-review.command settings standard
@@ -40,3 +42,11 @@ scripts/capture-visual-review.command settings-about
 ```
 
 Снимки PNG сохраняются в `dist/visual-review/`. После изменения интерфейса снимки нужно открыть и просмотреть. Успешная компиляция и unit-тесты сами по себе не подтверждают внешний вид.
+
+## Подписи говорящего и края экрана
+
+В меню «Эксперимент: диалоги» проверяйте текст, плашку и бабл, оба положения, 40 sp и системный шрифт 130%. Подпись и направляющая не должны пересекать реплику или контекст. Положение слова не меняется при появлении имени. В полноэкранном режиме отступ вычисляется по аппаратным скруглениям Android 12+ с запасом 20 dp, если устройство их не сообщает; вырез камеры также учитывается.
+
+Промежуточные результаты визуальной сборки помещаются в локальный временный каталог, чтобы синхронизация Documents не создавала дубли классов. Путь можно задать через `FLUX_REVIEW_BUILD_ROOT`.
+
+Только debug-вход принимает `bookFile` (имя файла в `cache/updates`), `chapter`, `findText`, `nameSize`, `label` (`text`, `chip`, `bubble`) и `below`. Это позволяет проверять настоящий импортированный FB2/EPUB, не добавляя книги в исходники.

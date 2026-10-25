@@ -48,4 +48,38 @@ class SpeedDialoguePlaybackTest {
         val token = "…то"
         assertTrue(token[SpeedReaderCursor.focusCharacterIndex(token)].isLetter())
     }
+    @org.junit.Test fun phraseFixationNeverCrossesAttributionAndRetainsAllLexicalWords() {
+        val text = "— Ты точно придёшь, — спросила Анна, — завтра вечером? Потом она вышла."
+        val config = io.fluxreader.app.data.ReaderSettings(speedDialogueEnabled = true,
+            speedMode = io.fluxreader.app.data.SpeedMode.PHRASE, speedSmartChunking = false,
+            speedAdaptiveChunkSize = false)
+        val observed = mutableListOf<String>()
+        var offset = 0
+        while (offset < text.length) {
+            val chunk = SpeedDialoguePlayback.next(text, offset, config, 7) ?: break
+            org.junit.Assert.assertTrue(chunk.endOffset > offset)
+            val identities = Regex("\\S+").findAll(text.substring(chunk.startOffset, chunk.endOffset))
+                .filter { it.value.any(Char::isLetterOrDigit) }
+                .map { SpeedDialogueAnalyzer.at(text, chunk.startOffset + it.range.first) }.toList()
+            org.junit.Assert.assertTrue(identities.distinct().size <= 1)
+            observed.addAll(chunk.tokens)
+            offset = chunk.endOffset
+        }
+        org.junit.Assert.assertEquals(Regex("\\S+").findAll(text).map { it.value }
+            .filter { it.any(Char::isLetterOrDigit) }.toList(), observed)
+    }
+
+    @org.junit.Test fun compactEpubMarkerIsCutAtOriginalCharacterBoundary() {
+        val text = "- Да, капитан,- ответил Павел.- Скоро вернусь."
+        val config = io.fluxreader.app.data.ReaderSettings(speedDialogueEnabled = true,
+            speedMode = io.fluxreader.app.data.SpeedMode.PHRASE, speedSmartChunking = false,
+            speedAdaptiveChunkSize = false)
+        val speech = SpeedDialoguePlayback.next(text, 0, config, 7)!!
+        org.junit.Assert.assertEquals(listOf("Да,", "капитан,"), speech.tokens)
+        org.junit.Assert.assertEquals(text.indexOf("- ответил"), speech.endOffset)
+        val author = SpeedDialoguePlayback.next(text, speech.endOffset, config, 1)!!
+        org.junit.Assert.assertEquals(listOf("ответил"), author.tokens)
+        org.junit.Assert.assertEquals(text.indexOf("ответил"), author.startOffset)
+    }
+
 }

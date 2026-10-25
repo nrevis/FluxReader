@@ -58,4 +58,100 @@ class SpeedDialogueAnalyzerTest {
         val unbroken = "— " + "а".repeat(9000)
         assertNull(SpeedDialogueAnalyzer.at(unbroken, 5000))
     }
+    @Test fun nonBreakingSpacesAndFullNamesAreRecognised() {
+        val text = "–\u00a0Понятно,\u00a0– так же тихо ответил Пётр Соколов."
+        val span = SpeedDialogueAnalyzer.at(text, text.indexOf("Понятно"))!!
+        assertEquals("Пётр Соколов", span.speaker)
+        assertEquals("–\u00a0Понятно,", text.substring(span.start, span.endExclusive).trim())
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("тихо")))
+    }
+
+    @Test fun interruptedReplyResumesWithSameSpeakerWithoutSecondReplyPause() {
+        val text = "— Да, — сказала Анна Соколова, — я обязательно приду."
+        assertEquals("Анна Соколова", SpeedDialogueAnalyzer.at(text, text.indexOf("Да"))?.speaker)
+        val resumed = text.indexOf("я обязательно")
+        assertEquals("Анна Соколова", SpeedDialogueAnalyzer.at(text, resumed)?.speaker)
+        assertTrue(SpeedDialogueAnalyzer.at(text, resumed)!!.continuation)
+        assertFalse(SpeedDialogueAnalyzer.isReplyStart(text, resumed))
+        assertNull(SpeedDialogueAnalyzer.shortReplyWordCount(text, resumed))
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("сказала")))
+    }
+
+    @Test fun compactTypographyDoesNotAbsorbAuthorRemark() {
+        val text = "- Возможно,- коротко ответил Павел.- Но решение ещё впереди."
+        assertEquals("Павел", SpeedDialogueAnalyzer.at(text, text.indexOf("Возможно"))?.speaker)
+        assertEquals("Павел", SpeedDialogueAnalyzer.at(text, text.indexOf("Но решение"))?.speaker)
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("коротко")))
+    }
+
+    @Test fun explicitIntroductionCanBeInPreviousParagraph() {
+        val text = "Анна спросила:\n\n— Ты придёшь?\n\n— Возможно."
+        assertEquals("Анна", SpeedDialogueAnalyzer.at(text, text.indexOf("Ты придёшь"))?.speaker)
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("Возможно"))?.speaker)
+    }
+
+    @Test fun eachQuotedReplyUsesItsOwnAttribution() {
+        val text = "Анна сказала: «Да». Павел спросил: «Почему?»"
+        assertEquals("Анна", SpeedDialogueAnalyzer.at(text, text.indexOf("Да"))?.speaker)
+        assertEquals("Павел", SpeedDialogueAnalyzer.at(text, text.indexOf("Почему"))?.speaker)
+        val ascii = "\"Вернусь завтра!\", — продолжил Николай."
+        assertEquals("Николай", SpeedDialogueAnalyzer.at(ascii, 0)?.speaker)
+    }
+
+    @Test fun titlesPronounsAndListsDoNotBecomeNamedCharacters() {
+        val titles = "Анна сказала, что прочитала «Первый снег»."
+        assertNull(SpeedDialogueAnalyzer.at(titles, titles.indexOf("Первый")))
+        for (text in listOf("— Хорошо, — ответил он.", "— Хорошо, — Он ответил тихо.")) {
+            assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("Хорошо"))?.speaker)
+        }
+        assertNull(SpeedDialogueAnalyzer.at("- 12 страниц", 0))
+        assertNull(SpeedDialogueAnalyzer.at("- ---", 0))
+        assertNull(SpeedDialogueAnalyzer.at("Время — деньги.", 8))
+    }
+
+    @Test fun actionRemarkAfterReplyIsNotSpeech() {
+        val text = "— До завтра! — Анна улыбнулась."
+        assertEquals("Анна", SpeedDialogueAnalyzer.at(text, 0)?.speaker)
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("улыбнулась")))
+    }
+
+    @Test fun adverbsAndAddresseesAreNotSpeakerNames() {
+        for (intro in listOf("Наконец он сказал:", "Подумав, он спросил:", "Не торопясь, он продолжил:")) {
+            val text = "$intro\n\n— Ты согласен?"
+            assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("Ты согласен"))?.speaker)
+        }
+        val text = "— Да, — сказал Павел Анне."
+        assertEquals("Павел", SpeedDialogueAnalyzer.at(text, 0)?.speaker)
+        val prefixed = "Наконец Селдон спросил:\n— Почему?"
+        assertEquals("Селдон", SpeedDialogueAnalyzer.at(prefixed, prefixed.indexOf("Почему"))?.speaker)
+    }
+
+    @Test fun scholarlyListAndIndirectQuotationAreNotDialogue() {
+        for (text in listOf("– равносторонний", "– равнобедренный")) assertNull(SpeedDialogueAnalyzer.at(text, 0))
+        val text = "Автор говорил, что есть два рода понятий: «общее» и «частное»."
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("общее")))
+    }
+
+    @Test fun quotedSpeechMayContainItsOwnAttribution() {
+        val text = "«Да, — сказала Анна, — я приду завтра.»"
+        assertEquals("Анна", SpeedDialogueAnalyzer.at(text, text.indexOf("Да"))?.speaker)
+        assertEquals("Анна", SpeedDialogueAnalyzer.at(text, text.indexOf("я приду"))?.speaker)
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("сказала")))
+        assertFalse(SpeedDialogueAnalyzer.isReplyStart(text, text.indexOf("я приду")))
+    }
+
+    @Test fun typographicDashMayTouchTheFirstWord() {
+        val text = "—Привет! —сказал Павел."
+        assertEquals("Павел", SpeedDialogueAnalyzer.at(text, 1)?.speaker)
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("сказал")))
+    }
+
+    @Test fun explicitAttributionDisambiguatesNumbersAndLowerCaseReplies() {
+        for (text in listOf("— 250, — ответил Павел.", "— хорошо, — ответил Павел.")) {
+            assertEquals("Павел", SpeedDialogueAnalyzer.at(text, 2)?.speaker)
+        }
+        val text = "Мягко ответил он:\n— Приходи завтра."
+        assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("Приходи"))?.speaker)
+    }
+
 }

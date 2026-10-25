@@ -9,6 +9,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import io.fluxreader.app.AppViewModel
 import io.fluxreader.app.data.ReaderThemeMode
+import io.fluxreader.app.data.SpeedSpeakerStyle
+import io.fluxreader.app.data.SpeedSpeakerPosition
 import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.data.SpeedLowerSegmentMode
 import io.fluxreader.app.ui.FluxReaderApp
@@ -33,6 +35,9 @@ class VisualReviewActivity : ComponentActivity() {
             experimentalPalette = null,
             experimentalCrtEnabled = intent.getBooleanExtra("effects", false),
             speedDialogueEnabled = true,
+            speedSpeakerStyle = when (intent.getStringExtra("label")) { "text" -> SpeedSpeakerStyle.TEXT; "chip" -> SpeedSpeakerStyle.CHIP; else -> SpeedSpeakerStyle.BUBBLE },
+            speedSpeakerFontSizeSp = intent.getIntExtra("nameSize", 24).toFloat(),
+            speedSpeakerPosition = if (intent.getBooleanExtra("below", false)) SpeedSpeakerPosition.BELOW else SpeedSpeakerPosition.ABOVE,
             speedDialogueShortReplies = scene != "ellipsis",
             speedMode = SpeedMode.RSVP,
             speedFontSizeSp = 35f,
@@ -47,14 +52,20 @@ class VisualReviewActivity : ComponentActivity() {
             return
         }
         lifecycleScope.launch {
-            val fixtureName = "Flux-Visual-Review.txt"
+            val localBook = intent.getStringExtra("bookFile")?.takeIf { File(it).name == it }
+            val fixtureName = localBook ?: "Flux-Visual-Review-98.txt"
             val fixture = File(File(cacheDir, "updates").apply { mkdirs() }, fixtureName)
-            fixture.writeText("""
+            if (localBook == null) fixture.writeText("""
                 — Добрый вечер! — сказала Анна.
 
                 — Садитесь, садитесь, прошу вас! И побыстрее, сегодня у нас много работы!
 
                 — …то отсюда следует, что всё получится.
+
+                — Да, — сказала Анна Соколова, — я обязательно приду завтра.
+
+                Павел спросил:
+                — Ты останешься здесь?
 
                 Анна закрыла книгу. В комнате стало тихо.
             """.trimIndent())
@@ -66,11 +77,12 @@ class VisualReviewActivity : ComponentActivity() {
                 viewModel.books.first { list -> list.any { it.originalName == fixtureName } }
                     .first { it.originalName == fixtureName }
             }
-            viewModel.openSpeedAt(book.id, 0, 0)
+            val chapter = intent.getIntExtra("chapter", 0)
+            viewModel.openSpeedAt(book.id, chapter, 0)
             val state = withTimeout(15_000) {
-                viewModel.speed.first { !it.loading && it.bookId == book.id && it.chapterText.isNotBlank() }
+                viewModel.speed.first { !it.loading && it.bookId == book.id && it.chapterIndex == chapter && it.chapterText.isNotBlank() }
             }
-            val target = when (scene) { "long" -> "Садитесь"; "ellipsis" -> "…то"; else -> "Добрый" }
+            val target = intent.getStringExtra("findText") ?: when (scene) { "long" -> "Садитесь"; "ellipsis" -> "…то"; "interrupted" -> "я обязательно"; "prefix" -> "Ты останешься"; else -> "Добрый" }
             viewModel.speedSeekToOffset(state.chapterText.indexOf(target).coerceAtLeast(0))
             viewModel.speedPause()
         }

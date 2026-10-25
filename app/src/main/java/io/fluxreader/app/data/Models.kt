@@ -29,6 +29,9 @@ enum class LibraryGroupMode { NONE, FOLDER, CUSTOM, SERIES, AUTHOR }
 enum class PageTurnAnimation { NONE, CURL, SLIDE, FADE, ZOOM }
 
 enum class SpeedMode { RSVP, PHRASE, FOCUS }
+enum class SpeedSpeakerStyle { TEXT, CHIP, BUBBLE }
+enum class SpeedSpeakerPosition { ABOVE, BELOW }
+enum class SpeedSpeakerColor { CHARACTER, THEME, BLUE, GREEN, AMBER, ROSE, VIOLET }
 enum class SpeedFocusStyle { CHARACTER, WORD }
 enum class SpeedPacingMode { CONSTANT, SMART, DEEP }
 enum class SpeedLowerSegmentMode { OFF, CURRENT, CONTEXT }
@@ -150,6 +153,13 @@ data class ReaderSettings(
     // All dialogue features are experimental and disabled until the main switch is enabled.
     val speedDialogueEnabled: Boolean = false,
     val speedDialogueNames: Boolean = true,
+    val speedSpeakerStyle: SpeedSpeakerStyle = SpeedSpeakerStyle.BUBBLE,
+    val speedSpeakerPosition: SpeedSpeakerPosition = SpeedSpeakerPosition.ABOVE,
+    val speedSpeakerColor: SpeedSpeakerColor = SpeedSpeakerColor.CHARACTER,
+    val speedSpeakerFontSizeSp: Float = 20f,
+    val speedSpeakerBold: Boolean = true,
+    val speedSpeakerBackgroundAlpha: Float = 0.16f,
+    val speedSpeakerGapDp: Float = 20f,
     val speedDialogueShortReplies: Boolean = true,
     val speedDialoguePauseEnabled: Boolean = true,
     val speedDialoguePauseMs: Int = 220,

@@ -412,7 +412,7 @@ object Fb2Parser {
             runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
             runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
         }
-        factory.newSAXParser().parse(input, handler)
+        factory.newSAXParser().parse(XmlBookInput.source(input), handler)
         handler.finish()
 
         if (refs.isEmpty()) {

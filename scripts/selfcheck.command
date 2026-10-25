@@ -409,7 +409,9 @@ grep -q 'FullscreenSystemBarsEffect(!chromeVisible)' app/src/main/java/io/fluxre
 grep -q 'pageLineSnapPx' app/src/main/java/io/fluxreader/app/ui/ReaderScreen.kt
 grep -q 'snapStepPx' app/src/main/java/io/fluxreader/app/reader/ReaderPageMath.kt
 grep -q 'next_snaps_inside_text_block_to_line_boundary' app/src/test/java/io/fluxreader/app/reader/ReaderPageMathTest.kt
-grep -q 'ImmersiveCameraClearance.current()' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt
+grep -q 'DeviceEdgeClearance.immersivePadding()' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt
+grep -q 'getRoundedCorner' app/src/main/java/io/fluxreader/app/ui/DeviceEdgeClearance.kt
+grep -q 'ImmersiveCameraClearance.current()' app/src/main/java/io/fluxreader/app/ui/DeviceEdgeClearance.kt
 echo "✅ alpha.15 fullscreen safe-area / cutout / line-snap guards OK"
 
 # alpha.16 folder hierarchy / typography guards
@@ -558,7 +560,8 @@ echo "✅ alpha.28 measured whole-line fill / no wasted nominal remainder guards
 CHAPTER_SPEED_OFFSET="app/src/main/java/io/fluxreader/app/reader/ChapterSpeedOffset.kt"
 grep -q 'localView.keepScreenOn = true' "$SPEED_SCREEN"
 grep -q 'currentLeftPx = focusTargetPx - focusCenterPx' "$SPEED_SCREEN"
-grep -q 'followingTokens(chapterText, chunkEndOffset' "$SPEED_SCREEN"
+grep -q 'followingTokens(chapterText, previewOffset' "$SPEED_SCREEN"
+grep -q 'SpeedDialoguePlayback.readableOffset(chapterText, chunkEndOffset)' "$SPEED_SCREEN"
 grep -q 'speedReedyFlowEnabled' app/src/main/java/io/fluxreader/app/data/Models.kt
 grep -q 'enum class SpeedProgressMode' app/src/main/java/io/fluxreader/app/data/Models.kt
 grep -q 'speedProgressModeV9' app/src/main/java/io/fluxreader/app/data/ReaderSettingsRepository.kt

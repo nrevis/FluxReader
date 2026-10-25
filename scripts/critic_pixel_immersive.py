@@ -24,7 +24,7 @@ checks={
 'No status bar in immersive camera policy': 'safeDrawing' not in cam.replace('Never use safeDrawing here',''),
 'Reader does not measure extra HUD row': 'The upper camera lane is an overlay' in r and 'modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)' in r,
 'Reader page reserves only camera top': 'top = cameraTop' in r,
-'Speed no longer uses safeDrawing for immersive content': '.padding(top = ImmersiveCameraClearance.current())' in s,
+'Speed reserves hardware corners and camera without status-bar band': '.padding(DeviceEdgeClearance.immersivePadding())' in s and 'getRoundedCorner' in get('DeviceEdgeClearance.kt'),
 'Old forced 36dp status band gone': 'maxOf(statusTop, cutoutTop, 36.dp)' not in r,
 'Manual full screen remains ungated': 'if (!settings.readerFullscreenEnabled && !visible) return' not in r,
 }

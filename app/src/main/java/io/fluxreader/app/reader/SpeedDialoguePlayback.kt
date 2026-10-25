@@ -5,7 +5,7 @@ import io.fluxreader.app.data.SpeedMode
 
 /** Playback offsets remain on the original text, including punctuation hidden from fixations. */
 object SpeedDialoguePlayback {
-    private val words = Regex("\\S+")
+    private val words = Regex("[^\\s\\p{Zs}]+")
 
     fun readableOffset(text: String, offset: Int): Int {
         var cursor = offset.coerceIn(0, text.length)
@@ -22,7 +22,7 @@ object SpeedDialoguePlayback {
         val start = if (config.speedDialogueEnabled) readableOffset(text, offset) else offset
         if (config.speedDialogueEnabled && config.speedDialogueShortReplies && config.speedMode == SpeedMode.RSVP) {
             val span = SpeedDialogueAnalyzer.at(text, start)
-            if (span != null && readableOffset(text, span.start) == start) {
+            if (span != null && !span.continuation && readableOffset(text, span.start) == start) {
                 val end = text.substring(start, span.endExclusive).trimEnd().length + start
                 val reply = text.substring(start, end)
                 val tokens = words.findAll(reply).map { it.value }.filter { token -> token.any(Char::isLetterOrDigit) }.take(7).toList()
@@ -33,10 +33,25 @@ object SpeedDialoguePlayback {
                 }
             }
         }
-        return SpeedReaderCursor.next(
+        val chunk = SpeedReaderCursor.next(
             text, start, wordCount, config.speedSmartChunking,
             adaptiveWordCount = config.speedAdaptiveChunkSize && config.speedMode != SpeedMode.RSVP,
             pacingMode = config.speedPacingMode,
-        )
+        ) ?: return null
+        if (!config.speedDialogueEnabled) return chunk
+        val initial = SpeedDialogueAnalyzer.at(text, start)
+        // Phrase/focus mode must not join speech and an author's remark in one fixation.
+        val matches = words.findAll(text.substring(start, chunk.endOffset)).toList()
+        val tokenBoundary = matches.firstOrNull { match ->
+            val at = start + match.range.first
+            match.value.any(Char::isLetterOrDigit) && SpeedDialogueAnalyzer.at(text, at) != initial
+        }?.range?.first?.plus(start) ?: chunk.endOffset
+        // EPUBs often glue a marker to punctuation ("Сир,- ответил..."). Its boundary
+        // can lie inside a whitespace token, so token starts alone are insufficient.
+        val boundary = minOf(tokenBoundary, initial?.endExclusive ?: chunk.endOffset)
+        val tokens = words.findAll(text.substring(start, boundary)).map { it.value }
+            .filter { it.any(Char::isLetterOrDigit) }.toList()
+        return if (tokens.isEmpty()) chunk else chunk.copy(tokens = tokens, endOffset = boundary,
+            focusTokenIndex = chunk.focusTokenIndex.coerceAtMost(tokens.lastIndex))
     }
 }

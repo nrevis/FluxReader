@@ -8,6 +8,7 @@ internal object SpeedViewportGeometry {
         mainHalfHeightPx: Float,
         edgeClearancePx: Float,
         lowerContentReservePx: Float,
+        upperContentReservePx: Float = 0f,
         preferredMinFraction: Float = 0.12f,
         preferredMaxFraction: Float = 0.88f,
     ): Float {
@@ -17,7 +18,8 @@ internal object SpeedViewportGeometry {
         val lower = lowerContentReservePx.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
         val requested = requestedFraction.takeIf { it.isFinite() } ?: 0.5f
 
-        val hardMin = (mainHalf + clearance) / viewport
+        val upper = upperContentReservePx.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
+        val hardMin = (mainHalf + clearance + upper) / viewport
         val hardMax = 1f - (mainHalf + clearance + lower) / viewport
         val preferredMin = preferredMinFraction.coerceIn(0f, 1f)
         val preferredMax = preferredMaxFraction.coerceIn(preferredMin, 1f)

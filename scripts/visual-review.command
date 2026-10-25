@@ -25,8 +25,15 @@ done
 [[ "$READY" == "1" ]] || { echo "Эмулятор не загрузился. См. dist/visual-review/emulator.log"; exit 3; }
 bash scripts/verify-version.command
 printf 'sdk.dir=%s\n' "$SDK" > local.properties
-./gradlew :app:assembleDebug --console=plain --no-daemon
-"$ADB" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk
+export FLUX_REVIEW_BUILD_ROOT="${FLUX_REVIEW_BUILD_ROOT:-${TMPDIR:-/tmp}/fluxreader-visual-build}"
+mkdir -p "$FLUX_REVIEW_BUILD_ROOT"
+cat > "$FLUX_REVIEW_BUILD_ROOT/local-build.init.gradle" <<'GRADLE'
+allprojects {
+    layout.buildDirectory.set(file(System.getenv('FLUX_REVIEW_BUILD_ROOT') + '/' + project.name))
+}
+GRADLE
+./gradlew -I "$FLUX_REVIEW_BUILD_ROOT/local-build.init.gradle" --project-cache-dir "$FLUX_REVIEW_BUILD_ROOT/project-cache" :app:assembleDebug --console=plain --no-daemon
+"$ADB" -s "$SERIAL" install -r "$FLUX_REVIEW_BUILD_ROOT/app/outputs/apk/debug/app-debug.apk"
 "$ADB" -s "$SERIAL" shell am start -S -n io.fluxreader.app/.debug.VisualReviewActivity \
   --es scene "$SCENE" --es theme "$THEME"
 echo "Открыта проверочная сцена: $SCENE / $THEME. Управляйте приложением в окне эмулятора."
