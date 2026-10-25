@@ -70,7 +70,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -1435,15 +1434,18 @@ private fun ReaderContent(
     val layoutDirection = LocalLayoutDirection.current
     val safePadding = WindowInsets.safeDrawing.asPaddingValues()
     val cameraTop = ImmersiveCameraClearance.current()
+    val edgePadding = DeviceEdgeClearance.immersivePadding()
     val inExperimentalFrame = settings.useWastelandDesign || settings.useCyberpunkDesign
     val viewportModifier = when {
         isFullscreen -> Modifier.padding(
-            start = if (inExperimentalFrame) 0.dp else safePadding.calculateStartPadding(layoutDirection),
-            end = if (inExperimentalFrame) 0.dp else safePadding.calculateEndPadding(layoutDirection),
+            start = maxOf(if (inExperimentalFrame) 0.dp else safePadding.calculateStartPadding(layoutDirection),
+                edgePadding.calculateStartPadding(layoutDirection) - settings.horizontalPaddingDp.dp, 0.dp),
+            end = maxOf(if (inExperimentalFrame) 0.dp else safePadding.calculateEndPadding(layoutDirection),
+                edgePadding.calculateEndPadding(layoutDirection) - settings.horizontalPaddingDp.dp, 0.dp),
             // Only the physical centered camera hole is guarded. No status-bar or
             // navigation-bar insets survive immersive mode, including in the theme frame.
             top = cameraTop,
-            bottom = 0.dp,
+            bottom = (edgePadding.calculateBottomPadding() - settings.bottomPaddingDp.dp).coerceAtLeast(0.dp),
         )
         !chromeVisible -> Modifier.padding(
             start = safePadding.calculateStartPadding(layoutDirection),
@@ -2176,7 +2178,7 @@ private fun ReaderBottomBar(
     val displayedProgress = if (scrubbing) scrubDraft else progress
     val canScrub = chapterCount > 0 && !state.loading && state.error == null
     val scrubBar: @Composable (Modifier) -> Unit = { sliderModifier ->
-        Slider(
+        SettingsSlider(
             value = displayedProgress.coerceIn(0f, 1f),
             onValueChange = { scrubDraft = it; scrubbing = true },
             onValueChangeFinished = {

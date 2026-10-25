@@ -47,6 +47,7 @@ class VisualReviewActivity : ComponentActivity() {
             speedChapterIntroMs = 0,
         ) }
         setContent { FluxReaderApp(viewModel) }
+        if (scene == "library") return
         if (scene == "settings") {
             viewModel.showSettings()
             return
@@ -77,12 +78,16 @@ class VisualReviewActivity : ComponentActivity() {
                 viewModel.books.first { list -> list.any { it.originalName == fixtureName } }
                     .first { it.originalName == fixtureName }
             }
+            if (scene == "reader") {
+                viewModel.openReader(book.id)
+                return@launch
+            }
             val chapter = intent.getIntExtra("chapter", 0)
             viewModel.openSpeedAt(book.id, chapter, 0)
             val state = withTimeout(15_000) {
                 viewModel.speed.first { !it.loading && it.bookId == book.id && it.chapterIndex == chapter && it.chapterText.isNotBlank() }
             }
-            val target = intent.getStringExtra("findText") ?: when (scene) { "long" -> "Садитесь"; "ellipsis" -> "…то"; "interrupted" -> "я обязательно"; "prefix" -> "Ты останешься"; else -> "Добрый" }
+            val target = intent.getStringExtra("findText") ?: when (scene) { "unknown", "long" -> "Садитесь"; "ellipsis" -> "…то"; "interrupted" -> "я обязательно"; "prefix" -> "Ты останешься"; else -> "Добрый" }
             viewModel.speedSeekToOffset(state.chapterText.indexOf(target).coerceAtLeast(0))
             viewModel.speedPause()
         }

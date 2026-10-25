@@ -8,6 +8,7 @@ import io.fluxreader.app.data.BookOutline
 import io.fluxreader.app.data.BookRecord
 import io.fluxreader.app.data.ChapterContent
 import io.fluxreader.app.data.ChapterRef
+import io.fluxreader.app.data.SmartBookImport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -63,7 +64,7 @@ class BookContentRepository(context: Context) {
                 val loaded = when (book.format) {
                     BookFormat.EPUB -> EpubParser.outline(file)
                     BookFormat.FB2 -> Fb2Parser.prepare(file, book.id, cacheRoot)
-                    BookFormat.TXT -> TxtParser.outline(file)
+                    BookFormat.TXT -> TxtParser.outline(file, SmartBookImport.metadataFromFilename(book.originalName).title)
                     BookFormat.PDF -> BookOutline(book.title, book.author, emptyList())
                 }
                 outlineCache.put(cacheKey, loaded)
@@ -93,7 +94,7 @@ class BookContentRepository(context: Context) {
                 val loaded = when (book.format) {
                     BookFormat.EPUB -> EpubParser.loadChapter(file, ref)
                     BookFormat.FB2 -> Fb2Parser.loadChapter(book.id, cacheRoot, ref)
-                    BookFormat.TXT -> TxtParser.loadChapter(file)
+                    BookFormat.TXT -> TxtParser.loadChapter(file, "Текст")
                     BookFormat.PDF -> error("PDF использует отдельный reader")
                 }
                 chapterCache.put(cacheKey, loaded)

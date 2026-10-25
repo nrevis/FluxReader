@@ -36,11 +36,12 @@ internal fun SpeedSpeakerLabel(
     background: Color,
     accent: Color,
     modifier: Modifier = Modifier,
+    namedSpeaker: Boolean = true,
 ) {
     val light = listOf(Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A), Color(0xFFA8D9A0), Color(0xFFEBADD4))
     val dark = listOf(Color(0xFF5935A2), Color(0xFF00686A), Color(0xFF8B4200), Color(0xFF31652C), Color(0xFF92396D))
     val palette = if (background.luminance() < .35f) light else dark
-    val chosen = when (settings.speedSpeakerColor) {
+    val chosen = when (if (namedSpeaker) settings.speedSpeakerColor else SpeedSpeakerColor.THEME) {
         SpeedSpeakerColor.CHARACTER -> palette[(speaker.lowercase().hashCode() and Int.MAX_VALUE) % palette.size]
         SpeedSpeakerColor.THEME -> accent
         SpeedSpeakerColor.BLUE -> if (background.luminance() < .35f) Color(0xFF9CCAFF) else Color(0xFF1D5599)
@@ -71,7 +72,7 @@ internal fun SpeedSpeakerLabel(
             drawPath(path, fill)
         }
     }
-    Column(modifier.semantics(mergeDescendants = true) { contentDescription = "Говорит: $speaker" },
+    Column(modifier.semantics(mergeDescendants = true) { contentDescription = if (namedSpeaker) "Говорит: $speaker" else speaker },
         horizontalAlignment = Alignment.CenterHorizontally) {
         if (bubble && !above) tail()
         if (settings.speedSpeakerStyle == SpeedSpeakerStyle.TEXT) label()

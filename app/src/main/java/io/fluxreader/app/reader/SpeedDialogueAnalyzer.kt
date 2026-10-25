@@ -22,11 +22,13 @@ object SpeedDialogueAnalyzer {
         "продолжал(?:а|и)?|пробормотал(?:а|и)?|промолвил(?:а|и)?|пролепетал(?:а|и)?|" +
         "отозвал(?:ся|ась|ись)|поинтересовал(?:ся|ась|ись)|осведомил(?:ся|ась|ись)|" +
         "пояснил(?:а|и)?|объяснил(?:а|и)?|уточнил(?:а|и)?|повторил(?:а|и)?|подтвердил(?:а|и)?|" +
-        "прибавил(?:а|и)?|вставил(?:а|и)?|заключил(?:а|и)?|выпалил(?:а|и)?|прервал(?:а|и)?)"
+        "прибавил(?:а|и)?|вставил(?:а|и)?|заключил(?:а|и)?|выпалил(?:а|и)?|прервал(?:а|и)?|" +
+        "рявкнул(?:а|и)?|заявил(?:а|и)?|проворчал(?:а|и)?|простонал(?:а|и)?|протянул(?:а|и)?|" +
+        "прохрипел(?:а|и)?|прорычал(?:а|и)?|отрезал(?:а|и)?|выдохнул(?:а|и)?)"
     private val speechVerb = Regex("(?<![\\p{L}])$VERB(?![\\p{L}])", RegexOption.IGNORE_CASE)
     private val actionVerb = Regex("(?<![\\p{L}])(?:улыбнул(?:ся|ась)|вздохнул(?:а)?|пожал(?:а)?|" +
         "кивнул(?:а)?|покачал(?:а)?|отвернул(?:ся|ась)|встал(?:а)?|уш[её]л|ушла|" +
-        "засмеял(?:ся|ась)|нахмурил(?:ся|ась))(?![\\p{L}])", RegexOption.IGNORE_CASE)
+        "засмеял(?:ся|ась)|нахмурил(?:ся|ась)|просиял(?:а)?|усмехнул(?:ся|ась))(?![\\p{L}])", RegexOption.IGNORE_CASE)
     // Case sensitivity is deliberate: IGNORE_CASE on this pattern used to accept ordinary nouns.
     private val name = Regex("(?<![\\p{L}])[\\p{Lu}][\\p{Ll}’'-]{1,29}(?:$SPACE+[\\p{Lu}][\\p{Ll}’'-]{1,29}){0,2}")
     private val notNames = setOf("Он", "Она", "Они", "Оно", "Это", "Этот", "Эта", "Один", "Одна", "Кто", "Как", "Что", "Его", "Её", "Ее", "Все", "Всё", "Тот", "Тогда", "Потом", "Затем", "Да", "Нет", "Ну", "Но", "Или", "Не", "Вы", "Ты", "Их", "Мой", "Моя", "Наш", "Наша", "Сам", "Наконец", "После", "Через", "На", "Взяв", "Покачав", "Подумав", "Оставшись", "Понизив", "Увидев", "Поправив", "Пожав", "Подняв", "Опустившись", "Неожиданно", "Вскоре", "Однажды", "Наутро", "Примерно", "Немного", "Очень", "Совершенно", "Тихо", "Стараясь", "Замолчав", "Помолчав", "Выходя", "Оторвавшись", "Сдержав", "Придав", "Наладив", "Сев", "Голос", "Губы", "Дрожащей", "Резким", "Старческий")
@@ -144,7 +146,15 @@ object SpeedDialogueAnalyzer {
         val beforeName = preceding?.takeIf {
             between.isEmpty() || words.findAll(between).all { word -> word.value.lowercase() in attributionAdverbs }
         }?.value?.let(::cleanName)
-        val afterName = name.find(after.trimStart())?.takeIf { it.range.first == 0 }?.value?.let(::cleanName)
+        // Adverbs and object pronouns can separate the speech verb and its subject:
+        // «ответил спокойно Павел», «спросил его Зурита». Never skip subject pronouns.
+        val afterWords = words.findAll(after).toList()
+        val subjectStart = afterWords.firstOrNull { word ->
+            val value = word.value.trimEnd(',').lowercase()
+            value !in attributionAdverbs && value !in setOf("его", "её", "ее", "их", "меня", "тебя", "нас", "вас", "профессор", "капитан", "доктор", "мистер", "мисс", "миссис", "сэр", "господин", "госпожа")
+        }?.range?.first ?: after.length
+        val subject = after.substring(subjectStart)
+        val afterName = name.find(subject)?.takeIf { it.range.first == 0 }?.value?.let(::cleanName)
         return DialogueAttribution(beforeName ?: afterName)
     }
 

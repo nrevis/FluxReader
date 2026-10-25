@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.fluxreader.app.ui
 
 import android.os.SystemClock
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +52,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -105,6 +109,7 @@ import io.fluxreader.app.data.SpeedMode
 import io.fluxreader.app.data.SpeedPacingMode
 import io.fluxreader.app.data.SpeedProgressMode
 import io.fluxreader.app.reader.SpeedDialoguePlayback
+import io.fluxreader.app.reader.SpeedDialoguePresentation
 import io.fluxreader.app.reader.SpeedDialogueAnalyzer
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SpeedSpeechCheckpointPolicy
@@ -654,7 +659,7 @@ private fun SpeedViewport(
         val speakerMeasurer = rememberTextMeasurer()
         val speakerStyle = speedSpeakerTextStyle(settings)
         val speakerTextHeight = speakerMeasurer.measure(AnnotatedString("Аг\nАг"), style = speakerStyle, maxLines = 2).size.height
-        val speakerSlotPx = if (settings.speedDialogueEnabled && settings.speedDialogueNames) with(density) {
+        val speakerSlotPx = if (settings.speedDialogueEnabled && (settings.speedDialogueNames || settings.speedDialogueIndicator)) with(density) {
             // Measure two actual lines: Android's nonlinear font scaling means 100.sp is not
             // necessarily twice 50.sp. Multiplying before conversion truncated the second line.
             speakerTextHeight + (18f + if (settings.speedSpeakerStyle == SpeedSpeakerStyle.BUBBLE) 8f else 0f).dp.toPx()
@@ -696,7 +701,7 @@ private fun SpeedViewport(
                 horizontalFocusPosition = settings.speedHorizontalFocusFraction,
                 mainHalfHeightPx = mainHalfHeightPx,
                 lowerContentReservePx = lowerContentReservePx,
-                hasSpeakerLabel = settings.speedDialogueEnabled && settings.speedDialogueNames,
+                hasSpeakerLabel = settings.speedDialogueEnabled && (settings.speedDialogueNames || settings.speedDialogueIndicator),
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -749,13 +754,14 @@ private fun SpeedViewport(
             }
             state.chunk != null -> {
                 val chunk = state.chunk
-                if (dialogue?.speaker != null && settings.speedDialogueNames) {
+                val dialogueLabel = SpeedDialoguePresentation.label(dialogue, settings.speedDialogueNames, settings.speedDialogueIndicator)
+                if (dialogueLabel != null) {
                     val slotDp = with(density) { speakerSlotPx.toDp() }
                     val labelOffset = mainHalfHeightDp + settings.speedSpeakerGapDp.dp + slotDp / 2
                     Box(Modifier.align(Alignment.Center).fillMaxWidth().height(slotDp)
                         .offset(y = yOffset + if (speakerBelow) labelOffset else -labelOffset),
                         contentAlignment = if (speakerBelow) Alignment.TopCenter else Alignment.BottomCenter) {
-                        SpeedSpeakerLabel(dialogue.speaker, settings, background = when {
+                        SpeedSpeakerLabel(dialogueLabel.text, settings, namedSpeaker = dialogueLabel.namedSpeaker, background = when {
                             settings.useWastelandDesign || settings.useCyberpunkDesign -> LocalExperimentalColors.current.background
                             settings.speedUseReaderTheme -> MaterialTheme.colorScheme.background
                             else -> Color(settings.speedBackgroundColorArgb)
@@ -1376,16 +1382,24 @@ private fun RsvpWord(
         val scale = min(1f, min(leftRoom / leftExtent, rightRoom / rightExtent))
         val requestedSize = baseSize * scale
         val minSize = settings.speedMinFontSizeSp
-        val finalSizeSp = when {
+        val preferredSizeSp = when {
             settings.speedFixedFontSize -> baseSize
             !settings.speedAutoFitText -> baseSize
             requestedSize >= minSize -> requestedSize
             leftExtent * (minSize / baseSize) <= leftRoom && rightExtent * (minSize / baseSize) <= rightRoom -> minSize
             else -> requestedSize.coerceAtLeast(14f)
         }
-        val finalText = focusedWord()
+        val finalText = baseText
+        // Even fixed-size mode must not cut letters off at the viewport edges. Check actual
+        // glyph bounds: Android font scaling is nonlinear, so a ratio of sp values is unsafe.
+        val finalSizeSp = if (preferredSizeSp == baseSize && leftExtent <= leftRoom && rightExtent <= rightRoom) baseSize
+        else SpeedTextFitPolicy.largestFitting(preferredSizeSp) { size ->
+            val layout = measurer.measure(finalText, style = baseStyle.copy(fontSize = size.sp), maxLines = 1, softWrap = false)
+            val focusX = layout.getBoundingBox(focus.coerceIn(0, token.lastIndex)).center.x
+            focusX <= leftRoom && layout.size.width - focusX <= rightRoom
+        }
         val finalStyle = baseStyle.copy(fontSize = finalSizeSp.sp)
-        val finalLayout = measurer.measure(finalText, style = finalStyle, maxLines = 1, softWrap = false)
+        val finalLayout = if (finalSizeSp == baseSize) baseLayout else measurer.measure(finalText, style = finalStyle, maxLines = 1, softWrap = false)
         val finalFocusBox = if (token.isNotEmpty()) finalLayout.getBoundingBox(focus.coerceIn(0, token.lastIndex)) else null
         val focusCenterPx = finalFocusBox?.center?.x ?: (finalLayout.size.width / 2f)
         // The ORP glyph is pinned to a stable left-biased fixation rail. The rail defaults
@@ -1480,80 +1494,17 @@ private fun FittedSpeedText(
             SpeedMode.PHRASE -> settings.speedFontSizeSp * 0.90f
             SpeedMode.FOCUS -> settings.speedFontSizeSp * 0.86f
         }
-        val minSize = settings.speedMinFontSizeSp.coerceAtMost(targetSize)
         val letterSpacing = settings.speedLetterSpacingSp.sp
-        val fittedSize = remember(
-            text,
-            maxWidthPx,
-            maxLines,
-            targetSize,
-            minSize,
-            settings.speedAutoFitText,
-            settings.speedLineHeightMultiplier,
-            settings.speedLetterSpacingSp,
-            settings.speedFontWeight,
-            family,
-        ) {
-            if (settings.speedFixedFontSize || !settings.speedAutoFitText) {
-                targetSize
-            } else {
-                var low = minSize
-                var high = targetSize
-                var best = minSize
-                repeat(7) {
-                    val mid = (low + high) / 2f
-                    val result = textMeasurer.measure(
-                        text = text,
-                        style = TextStyle(
-                            fontFamily = family,
-                            fontWeight = weight,
-                            fontSize = mid.sp,
-                            lineHeight = (mid * settings.speedLineHeightMultiplier).sp,
-                            letterSpacing = letterSpacing,
-                            textAlign = TextAlign.Center,
-                        ),
-                        maxLines = maxLines,
-                        softWrap = maxLines > 1,
-                        overflow = TextOverflow.Clip,
-                        constraints = Constraints(maxWidth = maxWidthPx),
-                    )
-                    if (result.hasVisualOverflow) {
-                        high = mid
-                    } else {
-                        best = mid
-                        low = mid
-                    }
-                }
-                if (best == minSize) {
-                    val atMin = textMeasurer.measure(
-                        text = text,
-                        style = TextStyle(
-                            fontFamily = family,
-                            fontWeight = weight,
-                            fontSize = minSize.sp,
-                            lineHeight = (minSize * settings.speedLineHeightMultiplier).sp,
-                            letterSpacing = letterSpacing,
-                            textAlign = TextAlign.Center,
-                        ),
-                        maxLines = maxLines,
-                        softWrap = maxLines > 1,
-                        overflow = TextOverflow.Clip,
-                        constraints = Constraints(maxWidth = maxWidthPx),
-                    )
-                    if (atMin.hasVisualOverflow && maxLines == 1) {
-                        val unbounded = textMeasurer.measure(
-                            text = text,
-                            style = TextStyle(fontFamily = family, fontWeight = weight, fontSize = minSize.sp, letterSpacing = letterSpacing),
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                        (minSize * maxWidthPx.toFloat() / unbounded.size.width.coerceAtLeast(1).toFloat() * 0.98f).coerceAtLeast(14f)
-                    } else {
-                        minSize
-                    }
-                } else {
-                    best
-                }
+        val fittedSize = remember(text, maxWidthPx, maxLines, targetSize, letterSpacing, weight, family,
+            settings.speedLineHeightMultiplier, density.fontScale) {
+            SpeedTextFitPolicy.largestFitting(targetSize) { size ->
+                val result = textMeasurer.measure(text = text,
+                    style = TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp,
+                        lineHeight = (size * settings.speedLineHeightMultiplier).sp,
+                        letterSpacing = letterSpacing, textAlign = TextAlign.Center),
+                    maxLines = maxLines, softWrap = maxLines > 1, overflow = TextOverflow.Clip,
+                    constraints = Constraints(maxWidth = maxWidthPx))
+                !result.hasVisualOverflow
             }
         }
         Text(
@@ -1600,7 +1551,7 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                     Text("SPEED", color = LocalFluxThemeMode.current.chromeText, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text("${wpmDraft.toInt()} WPM", color = LocalFluxThemeMode.current.chromeAccent, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                SettingsSlider(
                     value = wpmDraft,
                     onValueChange = { wpmDraft = it },
                     onValueChangeFinished = { viewModel.updateSettings { it.copy(speedWpm = wpmDraft.toInt()) } },
@@ -1669,7 +1620,7 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                 Text("Скорость", color = textColor.copy(alpha = 0.72f), style = MaterialTheme.typography.labelLarge)
                 Text("${wpmDraft.toInt()} WPM", color = textColor, style = MaterialTheme.typography.titleMedium)
             }
-            Slider(
+            SettingsSlider(
                 value = wpmDraft,
                 onValueChange = { wpmDraft = it },
                 onValueChangeFinished = { viewModel.updateSettings { it.copy(speedWpm = wpmDraft.toInt()) } },
@@ -1727,25 +1678,19 @@ private fun SpeedSettingsHub(
     onOpen: (SpeedSettingsPanel) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             ModalSheetHeader(
-                title = "Настройки скорочтения",
-                subtitle = "Основной экран оставляет только скорость и профили; остальные параметры разнесены по разделам.",
+                title = "Скорочтение",
+                subtitle = "Текст, диалоги и поведение чтения.",
                 onClose = onDismiss,
             )
-            Text("Основное", style = MaterialTheme.typography.titleMedium)
             SettingsValueSlider("Размер текста", settings.speedFontSizeSp, 24f..104f, { "${it.toInt()} sp" }) { value ->
                 viewModel.updateSettings { it.copy(speedFontSizeSp = value) }
             }
-            Text(
-                "Кегль меняется сразу, при этом одинаковый размер всех RSVP-слов остаётся включённым. Точная геометрия и автоподгонка находятся в «Расширенные».",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             SpeedSettingsNavRow("Отображение", "Шрифт, направляющая, контекст и прогресс") { onOpen(SpeedSettingsPanel.DISPLAY) }
             SpeedSettingsNavRow("Поведение", "Тапы, пауза, картинки и начало главы") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
             SpeedSettingsNavRow("Эксперимент: диалоги", "Распознавание персонажей, короткие реплики, паузы") { onOpen(SpeedSettingsPanel.DIALOGUE) }
@@ -1766,7 +1711,7 @@ private fun SpeedDialogueSheet(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss,
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
@@ -1789,6 +1734,7 @@ private fun SpeedVoiceSettingsSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
@@ -1902,6 +1848,7 @@ private fun SpeedDisplaySheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
@@ -1920,10 +1867,10 @@ private fun SpeedDisplaySheet(
                 checked = settings.speedUseReaderTheme,
             ) { enabled -> viewModel.updateSettings { it.copy(speedUseReaderTheme = enabled) } }
             Text("Шрифт", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(ReaderFontMode.SYSTEM, ReaderFontMode.SANS, ReaderFontMode.SERIF).forEach { FontModeChip(it, settings, viewModel) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(ReaderFontMode.MONO, ReaderFontMode.JETBRAINS_NERD).forEach { FontModeChip(it, settings, viewModel) }
             }
             if (settings.speedFontMode == ReaderFontMode.JETBRAINS_NERD) {
@@ -1945,7 +1892,7 @@ private fun SpeedDisplaySheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text("Сегмент под словом", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SpeedLowerSegmentMode.entries.forEach { mode ->
                     FilterChip(
                         selected = settings.speedLowerSegmentMode == mode,
@@ -1964,7 +1911,7 @@ private fun SpeedDisplaySheet(
                 checked = settings.speedShowProgress,
             ) { enabled -> viewModel.updateSettings { it.copy(speedShowProgress = enabled) } }
             if (settings.speedShowProgress) {
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     SpeedProgressMode.entries.forEach { mode ->
                         FilterChip(
                             selected = settings.speedProgressMode == mode,
@@ -1991,6 +1938,7 @@ private fun SpeedBehaviorSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
@@ -2047,6 +1995,7 @@ private fun SpeedAdvancedSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         onDismissRequest = onDismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
@@ -2060,7 +2009,7 @@ private fun SpeedAdvancedSheet(
                 onClose = onDismiss,
             )
             Text("Механика RSVP", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SpeedMode.entries.forEach { mode ->
                     FilterChip(
                         selected = settings.speedMode == mode,
@@ -2121,7 +2070,7 @@ private fun SpeedAdvancedSheet(
             Text("Геометрия текста", style = MaterialTheme.typography.titleMedium)
             SettingsToggleRow(
                 title = "Одинаковый размер слов",
-                subtitle = "Не менять кегль от слова к слову. По умолчанию включено — глазам не нужно постоянно адаптироваться.",
+                subtitle = "Обычные слова сохраняют размер. Слишком длинные уменьшаются, чтобы буквы не обрезались.",
                 checked = settings.speedFixedFontSize,
             ) { enabled -> viewModel.updateSettings { it.copy(speedFixedFontSize = enabled) } }
             SettingsValueSlider("Позиция точки взгляда", settings.speedHorizontalFocusFraction, 0.18f..0.50f, { "${(it * 100).toInt()}%" }) { value ->
@@ -2135,7 +2084,7 @@ private fun SpeedAdvancedSheet(
             SettingsValueSlider("Ширина зоны", settings.speedTextWidthFraction, 0.55f..1f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedTextWidthFraction = value) } }
             SettingsValueSlider("Высота фиксации", settings.speedVerticalPosition, 0.25f..0.75f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedVerticalPosition = value) } }
             SettingsValueSlider("Следующих слов", settings.speedPeripheralWords.toFloat(), 0f..6f, { it.toInt().toString() }) { value -> viewModel.updateSettings { it.copy(speedPeripheralWords = value.toInt()) } }
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SpeedFocusStyle.entries.forEach { style ->
                     FilterChip(
                         selected = settings.speedFocusStyle == style,

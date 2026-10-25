@@ -154,4 +154,29 @@ class SpeedDialogueAnalyzerTest {
         assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf("Приходи"))?.speaker)
     }
 
+    @Test fun explicitNamesMayFollowAdverbsOrObjectPronouns() {
+        for ((remark, speaker) in listOf(
+            "сказал наконец Сальватор" to "Сальватор",
+            "ответил спокойно Цзи Цзы" to "Цзи Цзы",
+            "спросил его Зурита" to "Зурита",
+        )) {
+            val text = "— Ты придёшь? — $remark."
+            assertEquals(speaker, SpeedDialogueAnalyzer.at(text, 2)?.speaker)
+            assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf(remark)))
+        }
+        val text = "— Хорошо, — сказал он Павлу."
+        assertNull(SpeedDialogueAnalyzer.at(text, 2)?.speaker)
+    }
+    @Test fun expressiveRemarksAndTitlesStillIdentifySpeaker() {
+        for ((remark, speaker) in listOf(
+            "просиял Слизнорт" to "Слизнорт",
+            "рявкнула профессор Макгонагалл" to "Макгонагалл",
+            "проворчал доктор Иванов" to "Иванов",
+        )) {
+            val text = "— Конечно! — $remark. — Всё готово."
+            assertEquals(speaker, SpeedDialogueAnalyzer.at(text, 2)?.speaker)
+            assertEquals(speaker, SpeedDialogueAnalyzer.at(text, text.indexOf("Всё готово"))?.speaker)
+            assertNull(SpeedDialogueAnalyzer.at(text, text.indexOf(remark)))
+        }
+    }
 }

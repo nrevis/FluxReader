@@ -20,4 +20,14 @@ class TxtParserTest {
             file.delete()
         }
     }
+    @Test fun storageFilenameDoesNotReplaceOriginalTitle() {
+        val file = File.createTempFile("16d6f867-9f3f-43c8-", ".txt")
+        try {
+            file.writeText("Обычный текст.")
+            assertEquals("Тестовая книга", TxtParser.outline(file, "Тестовая книга").title)
+            assertEquals("Текст", TxtParser.loadChapter(file, "Текст").title)
+        } finally {
+            file.delete()
+        }
+    }
 }

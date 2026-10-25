@@ -516,7 +516,7 @@ fun LibraryScreen(
                     )
                 } else if (settings.libraryViewMode == LibraryViewMode.GRID) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(154.dp),
+                        columns = GridCells.Adaptive(136.dp),
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = libraryBottomContentPadding),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -538,7 +538,7 @@ fun LibraryScreen(
                     }
                 } else if (settings.libraryViewMode == LibraryViewMode.COMPACT) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(104.dp),
+                        columns = GridCells.Adaptive(96.dp),
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 2.dp, bottom = libraryCompactBottomContentPadding),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1567,7 +1567,7 @@ private fun FolderLibrary(
         LibraryViewMode.GRID, LibraryViewMode.COMPACT -> {
             val compact = viewMode == LibraryViewMode.COMPACT
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(if (compact) 104.dp else 154.dp),
+                columns = GridCells.Adaptive(if (compact) 96.dp else 136.dp),
                 modifier = modifier,
                 contentPadding = PaddingValues(
                     start = if (compact) 10.dp else 14.dp,

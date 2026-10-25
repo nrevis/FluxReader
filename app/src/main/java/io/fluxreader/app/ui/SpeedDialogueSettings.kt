@@ -38,11 +38,16 @@ internal fun SpeedDialogueSettings(
         ) { value -> onUpdate { it.copy(speedDialogueEnabled = value) } }
         if (settings.speedDialogueEnabled) {
             SettingsToggleRow(
+                title = "Маркер прямой речи",
+                subtitle = "Показывает «Прямая речь», когда имя неизвестно или скрыто.",
+                checked = settings.speedDialogueIndicator,
+            ) { value -> onUpdate { it.copy(speedDialogueIndicator = value) } }
+            SettingsToggleRow(
                 title = "Имя говорящего",
-                subtitle = "Показывает имя при явном указании в тексте. Неизвестный говорящий остаётся без подписи.",
+                subtitle = "Показывает имя при явном указании в тексте. Если имя неизвестно, используется маркер прямой речи.",
                 checked = settings.speedDialogueNames,
             ) { value -> onUpdate { it.copy(speedDialogueNames = value) } }
-            if (settings.speedDialogueNames) {
+            if (settings.speedDialogueNames || settings.speedDialogueIndicator) {
                 Text("Оформление имени", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(SpeedSpeakerStyle.TEXT to "Текст", SpeedSpeakerStyle.CHIP to "Плашка", SpeedSpeakerStyle.BUBBLE to "Бабл").forEach { (style, title) ->
@@ -52,13 +57,13 @@ internal fun SpeedDialogueSettings(
                 Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background, RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE) {
-                            SpeedSpeakerLabel("Анна Соколова", settings, MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.primary)
+                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = MaterialTheme.colorScheme.background, accent = MaterialTheme.colorScheme.primary, namedSpeaker = settings.speedDialogueNames)
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
                         }
                         Text("Добрый вечер!", style = MaterialTheme.typography.titleLarge)
                         if (settings.speedSpeakerPosition == SpeedSpeakerPosition.BELOW) {
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
-                            SpeedSpeakerLabel("Анна Соколова", settings, MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.primary)
+                            SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = MaterialTheme.colorScheme.background, accent = MaterialTheme.colorScheme.primary, namedSpeaker = settings.speedDialogueNames)
                         }
                     }
                 }

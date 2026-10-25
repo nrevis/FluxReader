@@ -9,13 +9,13 @@ import java.io.File
 import java.nio.charset.Charset
 
 object TxtParser {
-    fun outline(file: File): BookOutline = BookOutline(
-        title = file.nameWithoutExtension,
+    fun outline(file: File, title: String = file.nameWithoutExtension): BookOutline = BookOutline(
+        title = title,
         author = "",
         chapters = listOf(ChapterRef(0, "Текст", file.absolutePath)),
     )
 
-    fun loadChapter(file: File): ChapterContent {
+    fun loadChapter(file: File, title: String = file.nameWithoutExtension): ChapterContent {
         val text = decode(file.readBytes())
         val blocks = text
             .replace("\r\n", "\n")
@@ -26,7 +26,7 @@ object TxtParser {
             .filter { it.isNotBlank() }
             .map { paragraph -> ReaderBlock.Text(paragraph, TextRole.PARAGRAPH) }
             .toList()
-        return ChapterContent(0, file.nameWithoutExtension, blocks)
+        return ChapterContent(0, title, blocks)
     }
 
     private fun decode(bytes: ByteArray): String {

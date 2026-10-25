@@ -153,6 +153,7 @@ data class ReaderSettings(
     // All dialogue features are experimental and disabled until the main switch is enabled.
     val speedDialogueEnabled: Boolean = false,
     val speedDialogueNames: Boolean = true,
+    val speedDialogueIndicator: Boolean = true,
     val speedSpeakerStyle: SpeedSpeakerStyle = SpeedSpeakerStyle.BUBBLE,
     val speedSpeakerPosition: SpeedSpeakerPosition = SpeedSpeakerPosition.ABOVE,
     val speedSpeakerColor: SpeedSpeakerColor = SpeedSpeakerColor.CHARACTER,

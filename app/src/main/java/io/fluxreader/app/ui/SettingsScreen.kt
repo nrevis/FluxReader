@@ -38,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -89,7 +90,7 @@ fun SettingsScreen(
         topBar = {
             if (settings.useWastelandDesign || settings.useCyberpunkDesign) {
                 ExperimentalTopBar(
-                    title = "SETTINGS",
+                    title = "Настройки",
                     subtitle = section.title,
                     navigation = {
                         IconButton(onClick = onBack) {
@@ -121,33 +122,35 @@ fun SettingsScreen(
                 selected = section,
                 onSelect = { sectionName = it.name },
             )
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                when (section) {
-                    SettingsSection.APPEARANCE -> ReaderPreferencesControls(
-                        settings = settings,
-                        onUpdate = viewModel::updateSettings,
-                        includeTheme = true,
-                        includeProfiles = false,
-                        includeNavigation = false,
-                        includeText = false,
-                    )
-                    SettingsSection.READING -> ReaderPreferencesControls(
-                        settings = settings,
-                        onUpdate = viewModel::updateSettings,
-                        includeTheme = false,
-                        includeProfiles = true,
-                        includeNavigation = true,
-                        includeText = true,
-                    )
-                    SettingsSection.LIBRARY -> LibrarySettings(settings, viewModel)
-                    SettingsSection.SPEED -> SpeedSettings(settings, viewModel)
-                    SettingsSection.OCR -> OcrSettings(settings, viewModel)
-                    SettingsSection.ABOUT -> AboutSettings(viewModel)
+            key(section) {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    when (section) {
+                        SettingsSection.APPEARANCE -> ReaderPreferencesControls(
+                            settings = settings,
+                            onUpdate = viewModel::updateSettings,
+                            includeTheme = true,
+                            includeProfiles = false,
+                            includeNavigation = false,
+                            includeText = false,
+                        )
+                        SettingsSection.READING -> ReaderPreferencesControls(
+                            settings = settings,
+                            onUpdate = viewModel::updateSettings,
+                            includeTheme = false,
+                            includeProfiles = true,
+                            includeNavigation = true,
+                            includeText = true,
+                        )
+                        SettingsSection.LIBRARY -> LibrarySettings(settings, viewModel)
+                        SettingsSection.SPEED -> SpeedSettings(settings, viewModel)
+                        SettingsSection.OCR -> OcrSettings(settings, viewModel)
+                        SettingsSection.ABOUT -> AboutSettings(viewModel)
+                    }
+                    Spacer(Modifier.height(28.dp))
                 }
-                Spacer(Modifier.height(28.dp))
             }
         }
     }
@@ -226,7 +229,10 @@ private fun SettingsSectionTabs(
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             SettingsSection.entries.forEach { item ->
+                val bringIntoView = remember { BringIntoViewRequester() }
+                LaunchedEffect(selected) { if (item == selected) bringIntoView.bringIntoView() }
                 FilterChip(
+                    modifier = Modifier.bringIntoViewRequester(bringIntoView),
                     selected = item == selected,
                     onClick = { onSelect(item) },
                     leadingIcon = { FluxThemedIcon(sectionRole(item), sectionIcon(item), contentDescription = null, modifier = Modifier.size(18.dp)) },
@@ -280,6 +286,7 @@ private fun SettingsSectionTabs(
     HorizontalDivider()
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
     SectionTitle(Icons.Default.GridView, FluxIconRole.LIBRARY, "Библиотека")
@@ -295,9 +302,8 @@ private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Text("Группировка", style = MaterialTheme.typography.labelLarge)
-    LibraryGroupMode.entries.chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            row.forEach { mode ->
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            LibraryGroupMode.entries.forEach { mode ->
                 FilterChip(
                     selected = settings.libraryGroupMode == mode,
                     onClick = { viewModel.updateSettings { it.copy(libraryGroupMode = mode) } },
@@ -310,19 +316,14 @@ private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
                     }) },
                 )
             }
-        }
     }
     Text(
         "Режим «Папки» повторяет структуру выбранного каталога и всех его подпапок. Одинаковая книга может отображаться в нескольких папках без создания дубликата файла.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(Modifier.weight(1f)) {
-            Text("Продолжить", style = MaterialTheme.typography.labelLarge)
-            Text("Последняя читаемая книга в начале главной.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = settings.libraryShowContinue, onCheckedChange = { enabled -> viewModel.updateSettings { it.copy(libraryShowContinue = enabled) } })
+    SettingsToggleRow("Продолжить", "Последняя читаемая книга в начале главной.", settings.libraryShowContinue) { enabled ->
+        viewModel.updateSettings { it.copy(libraryShowContinue = enabled) }
     }
     SectionTitle(Icons.Default.Refresh, FluxIconRole.APPEARANCE, "Обложки")
     Text(

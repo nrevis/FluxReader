@@ -201,6 +201,9 @@ private fun darkScheme(theme: ReaderThemeMode): ColorScheme = when (theme) {
         tertiaryContainer = Color(0xFF4D2412), onTertiaryContainer = Color(0xFFFFC7A7),
         background = Color(0xFF030904), onBackground = Color(0xFFD3EDAE),
         surface = Color(0xFF10140B), onSurface = Color(0xFFE0EBC7),
+        surfaceContainerLowest = Color(0xFF050B05), surfaceContainerLow = Color(0xFF0A140A),
+        surfaceContainer = Color(0xFF101A10), surfaceContainerHigh = Color(0xFF162016),
+        surfaceContainerHighest = Color(0xFF1C2918),
         surfaceVariant = Color(0xFF272417), onSurfaceVariant = Color(0xFFB6B78B),
         outline = Color(0xFF8C6C32), outlineVariant = Color(0xFF4D4728),
     )
@@ -213,6 +216,9 @@ private fun darkScheme(theme: ReaderThemeMode): ColorScheme = when (theme) {
         tertiaryContainer = Color(0xFF322069), onTertiaryContainer = Color(0xFFE5DCFF),
         background = Color(0xFF03050D), onBackground = Color(0xFFF0FAFF),
         surface = Color(0xFF080C18), onSurface = Color(0xFFF0FAFF),
+        surfaceContainerLowest = Color(0xFF040711), surfaceContainerLow = Color(0xFF080D19),
+        surfaceContainer = Color(0xFF0D1426), surfaceContainerHigh = Color(0xFF111B30),
+        surfaceContainerHighest = Color(0xFF17233B),
         surfaceVariant = Color(0xFF111A2D), onSurfaceVariant = Color(0xFFB5C8E7),
         outline = Color(0xFF2879A1), outlineVariant = Color(0xFF4B2363),
     )

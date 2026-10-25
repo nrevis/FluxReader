@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,11 +27,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,6 +51,7 @@ import io.fluxreader.app.data.ReaderThemeMode
 import io.fluxreader.app.data.ThemeAppearance
 import io.fluxreader.app.data.experimentalFrameTheme
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReaderPreferencesControls(
     settings: ReaderSettings,
@@ -72,7 +71,7 @@ fun ReaderPreferencesControls(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (includeProfiles) {
         PreferenceTitle(Icons.Default.AutoStories, "Профили")
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             FilterChip(selected = false, onClick = {
                 onUpdate { it.copy(fontSizeSp = 18f, lineHeightMultiplier = 1.32f, horizontalPaddingDp = 18f, topPaddingDp = 14f, bottomPaddingDp = 14f, paragraphSpacingDp = 6f, firstLineIndentDp = 0f, fontMode = ReaderFontMode.SANS, textAlignment = ReaderTextAlignment.LEFT, hyphenationEnabled = false) }
             }, leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null, modifier = Modifier.size(18.dp)) }, label = { Text("Плотно") })
@@ -115,8 +114,8 @@ fun ReaderPreferencesControls(
         if (includeTheme) {
             PreferenceTitle(Icons.Default.Palette, "Тема")
             Text("Режим", style = MaterialTheme.typography.labelLarge, color = settingsInk)
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 ThemeAppearance.entries.forEach { appearance ->
@@ -284,7 +283,7 @@ fun ReaderPreferencesControls(
                 checked = settings.readerFullscreenEnabled,
                 onCheckedChange = { enabled -> onUpdate { it.copy(readerFullscreenEnabled = enabled) } },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 ReaderNavigationMode.entries.forEach { mode ->
                     FilterChip(
                         selected = settings.navigationMode == mode,
@@ -319,7 +318,7 @@ fun ReaderPreferencesControls(
             }
 
             Text("Анимация страниц", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(PageTurnAnimation.CURL, PageTurnAnimation.SLIDE, PageTurnAnimation.NONE).forEach { animation ->
                     FilterChip(
                         selected = settings.pageTurnAnimation == animation,
@@ -328,7 +327,7 @@ fun ReaderPreferencesControls(
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(PageTurnAnimation.FADE, PageTurnAnimation.ZOOM).forEach { animation ->
                     FilterChip(
                         selected = settings.pageTurnAnimation == animation,
@@ -363,18 +362,18 @@ fun ReaderPreferencesControls(
         if (includeText) {
         PreferenceTitle(Icons.Default.FormatSize, if (includeAdvancedText && !includeBasicText) "Точное форматирование" else "Текст")
         if (includeBasicText) {
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(ReaderFontMode.SYSTEM, ReaderFontMode.SERIF, ReaderFontMode.SANS).forEach { font ->
                     FilterChip(selected = settings.fontMode == font, onClick = { onUpdate { it.copy(fontMode = font) } }, label = { Text(fontLabel(font)) })
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(ReaderFontMode.MONO, ReaderFontMode.JETBRAINS_NERD).forEach { font ->
                     FilterChip(selected = settings.fontMode == font, onClick = { onUpdate { it.copy(fontMode = font) } }, label = { Text(fontLabel(font)) })
                 }
             }
             if (settings.fontMode == ReaderFontMode.JETBRAINS_NERD) JetBrainsNerdFontImporter(settings = settings, onUpdate = onUpdate)
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 ReaderTextAlignment.entries.forEach { alignment ->
                     FilterChip(selected = settings.textAlignment == alignment, onClick = { onUpdate { it.copy(textAlignment = alignment) } }, label = { Text(if (alignment == ReaderTextAlignment.LEFT) "По левому" else "По ширине") })
                 }
@@ -433,39 +432,12 @@ private fun TapZonePreview(edgeFraction: Float) {
 
 @Composable
 private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    val body: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = if (LocalFluxThemeMode.current == ReaderThemeMode.WASTELAND_TERMINAL) LocalExperimentalColors.current.text else MaterialTheme.colorScheme.onSurface)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
-        }
-    }
-    if (LocalFluxThemeMode.current == ReaderThemeMode.WASTELAND_TERMINAL) {
-        WastelandPanel(modifier = Modifier.fillMaxWidth(), contentPadding = 8.dp) { body() }
-    } else {
-        body()
-    }
+    SettingsToggleRow(title, subtitle, checked, onCheckedChange)
 }
 
 @Composable
 private fun PreferenceSlider(title: String, value: Float, range: ClosedFloatingPointRange<Float>, format: (Float) -> String, onCommit: (Float) -> Unit) {
-    var draft by remember(value) { mutableFloatStateOf(value) }
-    val body: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = if (LocalFluxThemeMode.current == ReaderThemeMode.WASTELAND_TERMINAL) LocalExperimentalColors.current.text else MaterialTheme.colorScheme.onSurface)
-                Text(format(draft), color = if (LocalFluxThemeMode.current == ReaderThemeMode.WASTELAND_TERMINAL) LocalExperimentalColors.current.accent else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Slider(value = draft.coerceIn(range.start, range.endInclusive), onValueChange = { draft = it }, onValueChangeFinished = { onCommit(draft) }, valueRange = range)
-        }
-    }
-    if (LocalFluxThemeMode.current == ReaderThemeMode.WASTELAND_TERMINAL) {
-        WastelandPanel(modifier = Modifier.fillMaxWidth(), contentPadding = 8.dp) { body() }
-    } else {
-        body()
-    }
+    SettingsValueSlider(title, value, range, format, onCommit)
 }
 
 @Composable
