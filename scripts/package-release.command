@@ -44,7 +44,7 @@ jar tf "$ROOT/gradle/wrapper/gradle-wrapper.jar" | grep -q 'org/gradle/wrapper/G
 
 (
   cd "$ROOT"
-  bash scripts/selfcheck.command --static
+  PYTHONDONTWRITEBYTECODE=1 bash scripts/selfcheck.command --static
 )
 
 rm -f "$ZIP"
