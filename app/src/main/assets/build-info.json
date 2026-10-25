@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.104",
-  "versionCode": 20121,
+  "versionName": "0.2.0-alpha.105",
+  "versionCode": 20122,
   "line": "0.2-clean-rewrite",
-  "focus": "downloadable-offline-neural-voices-and-character-colors"
+  "focus": "automatic-chapter-dialogue-rules-and-scene-boundaries"
 }

@@ -47,7 +47,9 @@ class BookDialogueRepository(cacheRoot: File, private val content: BookContentRe
                 BookDialogueAnalyzer.local(text, checkpoint)
             }.also { cache.write(source, chapterKey, "local", it) }
             characters.observe(text, local)
-            if (index == currentChapter) onChapter(index, local)
+            if (index == currentChapter) onChapter(index, withContext(Dispatchers.Default) {
+                BookDialogueAnalyzer.enrich(text, local, characters.build(), checkpoint)
+            })
             onProgress(BookDialogueProgress(1, done + 1, order.size))
             yield()
         }

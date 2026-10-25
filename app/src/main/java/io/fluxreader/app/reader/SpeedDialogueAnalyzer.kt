@@ -11,7 +11,7 @@ data class SpeedDialogueSpan(
 }
 
 /** Conservative local rules: explicit attribution only; no alternation-based speaker guessing. */
-private data class DialogueAttribution(val speaker: String?)
+private data class DialogueAttribution(val speaker: String?, val pronoun: String? = null)
 
 object SpeedDialogueAnalyzer {
     private const val SPACE = "[\\s\\p{Zs}]"
@@ -27,11 +27,14 @@ object SpeedDialogueAnalyzer {
         "прохрипел(?:а|и)?|прорычал(?:а|и)?|отрезал(?:а|и)?|выдохнул(?:а|и)?|" +
         "сообщил(?:а|и)?|попросил(?:а|и)?|потребовал(?:а|и)?|предупредил(?:а|и)?|" +
         "заверил(?:а|и)?|признал(?:а|и)?|признал(?:ся|ась|ись)|объявил(?:а|и)?|" +
-        "затараторил(?:а|и)?|заговорил(?:а|и)?|прервал(?:ся|ась|ись)|пожаловал(?:ся|ась|ись))"
+        "затараторил(?:а|и)?|заговорил(?:а|и)?|окликнул(?:а|и)?|восклицал(?:а|и)?|" +
+        "прокричал(?:а|и)?|вскричал(?:а|и)?|прервал(?:ся|ась|ись)|пожаловал(?:ся|ась|ись))"
     internal val speechVerb = Regex("(?<![\\p{L}])$VERB(?![\\p{L}])", RegexOption.IGNORE_CASE)
     private val actionVerb = Regex("(?<![\\p{L}])(?:улыбнул(?:ся|ась)|вздохнул(?:а)?|пожал(?:а)?|" +
         "кивнул(?:а)?|покачал(?:а)?|отвернул(?:ся|ась)|встал(?:а)?|уш[её]л|ушла|" +
         "засмеял(?:ся|ась)|нахмурил(?:ся|ась)|просиял(?:а)?|усмехнул(?:ся|ась))(?![\\p{L}])", RegexOption.IGNORE_CASE)
+    // Begin/end are speech cues only in a closed author remark, never in a prose introduction.
+    private val boundaryVerb = Regex("(?<![\\p{L}])(?:начал(?:а|и)?|закончил(?:а|и)?|окончил(?:а|и)?)(?![\\p{L}])", RegexOption.IGNORE_CASE)
     // Case sensitivity is deliberate: IGNORE_CASE on this pattern used to accept ordinary nouns.
     private val name = Regex("(?<![\\p{L}])[\\p{Lu}][\\p{Ll}’'-]{1,29}(?:$SPACE+[\\p{Lu}][\\p{Ll}’'-]{1,29}){0,2}")
     private val notNames = setOf("Он", "Она", "Они", "Оно", "Это", "Этот", "Эта", "Один", "Одна", "Кто", "Как", "Что", "Его", "Её", "Ее", "Все", "Всё", "Тот", "Тогда", "Потом", "Затем", "Да", "Нет", "Ну", "Но", "Или", "Не", "Вы", "Ты", "Их", "Мой", "Моя", "Наш", "Наша", "Сам", "Наконец", "После", "Через", "На", "Взяв", "Покачав", "Подумав", "Оставшись", "Понизив", "Увидев", "Поправив", "Пожав", "Подняв", "Опустившись", "Неожиданно", "Вскоре", "Однажды", "Наутро", "Примерно", "Немного", "Очень", "Совершенно", "Тихо", "Стараясь", "Замолчав", "Помолчав", "Выходя", "Оторвавшись", "Сдержав", "Придав", "Наладив", "Сев", "Голос", "Губы", "Дрожащей", "Резким", "Старческий")
@@ -132,30 +135,37 @@ object SpeedDialogueAnalyzer {
             line[i] in "—–-" && (line[i - 1].isWhitespace() || line[i - 1] in ",.!?…»\"") &&
                 (i + 1 == end || line[i + 1].isWhitespace() || line[i] in "—–" || line[i - 1] in ",.!?…")
         }
-        val ranges = mutableListOf<Pair<Int, Int>>()
+        data class Part(val start: Int, val end: Int, val author: DialogueAttribution?, val trailingAuthor: Boolean)
+        val parts = mutableListOf<Part>()
         var current = start
-        var speaker = intro
-        var sawAuthor = false
+        var inherited = intro?.let { DialogueAttribution(it) }
         var index = 0
         while (index < dashes.size) {
             val dash = dashes[index]
             val next = dashes.getOrNull(index + 1) ?: end
             val author = attribution(line.substring(dash + 1, next).take(220), allowAction = true)
             if (author != null) {
-                if (dash > current) ranges += current to dash
-                if (!sawAuthor) { speaker = author.speaker; sawAuthor = true }
+                // Each remark identifies the speech immediately before it, not the entire paragraph.
+                if (dash > current) parts += Part(current, dash, author, trailingAuthor = true)
+                inherited = author
                 current = if (next < end) next + 1 else end
                 index += 2
             } else index++
         }
-        if (current < end) ranges += current to end
-        return ranges.filter { (a, b) -> line.substring(a, b).any(Char::isLetterOrDigit) }
-            .mapIndexed { i, (a, b) -> SpeedDialogueSpan(a, b, speaker, continuation = i > 0) }
+        if (current < end) parts += Part(current, end, inherited, trailingAuthor = false)
+        val spoken = parts.filter { line.substring(it.start, it.end).any(Char::isLetterOrDigit) }
+        return spoken.mapIndexed { i, part ->
+            val previous = spoken.getOrNull(i - 1)?.author
+            val sameSpeaker = part.author?.speaker != null && part.author.speaker == previous?.speaker
+            val samePronoun = part.author?.pronoun != null && part.author.pronoun == previous?.pronoun
+            val continuation = i > 0 && (!part.trailingAuthor || sameSpeaker || samePronoun)
+            SpeedDialogueSpan(part.start, part.end, part.author?.speaker, continuation)
+        }
     }
 
     private fun attribution(raw: String, allowAction: Boolean = false, preferLast: Boolean = false): DialogueAttribution? {
         val text = raw.trim()
-        val verb = (if (preferLast) speechVerb.findAll(text).lastOrNull() else speechVerb.find(text)) ?: if (allowAction) actionVerb.find(text) else null
+        val verb = (if (preferLast) speechVerb.findAll(text).lastOrNull() else speechVerb.find(text)) ?: if (allowAction) actionVerb.find(text) ?: boundaryVerb.find(text) else null
         if (verb == null || verb.range.first > 120) return null
         val before = text.substring(0, verb.range.first).let { if (preferLast) it.substringAfterLast('»').substringAfterLast('”').substringAfterLast('!').substringAfterLast('?').substringAfterLast('.') else it }
         // Do not reach into the next narrative sentence looking for any speech verb.
@@ -177,30 +187,40 @@ object SpeedDialogueAnalyzer {
         }?.range?.first ?: after.length
         val subject = after.substring(subjectStart)
         val afterName = name.find(subject)?.takeIf { it.range.first == 0 }?.value?.let(::cleanName)
-        return DialogueAttribution(beforeName ?: afterName)
+        val speaker = beforeName ?: afterName
+        val afterSubject = afterWords.map { it.value.trim(',', '.', '!', '?', '…').lowercase() }
+            .dropWhile { it in attributionAdverbs || it in setOf("профессор", "капитан", "доктор", "мистер", "мисс", "миссис", "сэр", "господин", "госпожа") }
+            .firstOrNull()?.takeIf { it in setOf("он", "она") }
+        val beforeWords = words.findAll(before).map { it.value.lowercase() }.toList()
+        val pronoun = afterSubject ?: beforeWords.firstOrNull()?.takeIf {
+            it in setOf("он", "она") && beforeWords.drop(1).all { w -> w in attributionAdverbs }
+        }
+        if (boundaryVerb.matches(verb.value)) {
+            // “Игорь закончил работу” is an action, while “закончил Игорь” closes speech.
+            val suffix = after.takeWhile { it !in ",.!?…;:()" }
+            val remaining = Regex("[\\p{L}’'-]+").findAll(before + " " + suffix).map { it.value.lowercase() }.toList()
+            val subjectWords = speaker?.lowercase()?.split(Regex(SPACE + "+")).orEmpty() + listOfNotNull(pronoun)
+            val allowed = attributionAdverbs + subjectWords + setOf("профессор", "капитан", "доктор", "мистер", "мисс", "миссис", "сэр", "господин", "госпожа")
+            if (subjectWords.isEmpty() || remaining.any { it !in allowed }) return null
+        }
+        return DialogueAttribution(speaker, pronoun)
     }
 
     internal fun attributionVerb(text: String): MatchResult? = speechVerb.find(text) ?: actionVerb.find(text)
+        ?: boundaryVerb.find(text)?.takeIf { attribution(text, allowAction = true) != null }
 
     /** Reuses the attribution grammar; only a subject pronoun beside the speech verb qualifies. */
     internal fun authorPronoun(raw: String): String? {
         val text = raw.trim().trimStart('—', '–', '-', ' ', '\u00a0', '\u202f')
         if (attribution(text, allowAction = true)?.speaker != null) return null
-        val verb = speechVerb.find(text) ?: actionVerb.find(text) ?: return null
-        if (attribution(text, allowAction = true) == null) return null
-        val after = words.findAll(text.substring(verb.range.last + 1)).map {
-            it.value.trim(',', '.', '!', '?', '…').lowercase()
-        }.dropWhile { it in attributionAdverbs }.firstOrNull()
-        if (after in setOf("он", "она")) return after
-        val before = words.findAll(text.substring(0, verb.range.first)).map { it.value.lowercase() }.toList()
-        return before.firstOrNull()?.takeIf { it in setOf("он", "она") && before.drop(1).all { w -> w in attributionAdverbs } }
+        return attribution(text, allowAction = true)?.pronoun
     }
 
     /** Gender comes from an explicit author verb, never from a guessed name suffix. */
     internal fun authorGender(raw: String, speaker: String): DialogueGender? {
         val text = raw.trim().trimStart('—', '–', '-', ' ', '\u00a0', '\u202f')
         if (attribution(text, allowAction = true)?.speaker != speaker) return null
-        val verb = (speechVerb.find(text) ?: actionVerb.find(text))?.value?.lowercase() ?: return null
+        val verb = attributionVerb(text)?.value?.lowercase() ?: return null
         return when {
             verb.endsWith("ла") || verb.endsWith("лась") -> DialogueGender.FEMININE
             verb.endsWith("л") || verb.endsWith("лся") || verb.endsWith("ёс") || verb.endsWith("ес") -> DialogueGender.MASCULINE

@@ -78,5 +78,5 @@ internal class BookDialogueDiskCache(private val root: File, private val maxByte
         }
     }
 
-    private companion object { const val VERSION = 4 }
+    private companion object { const val VERSION = 5 }
 }

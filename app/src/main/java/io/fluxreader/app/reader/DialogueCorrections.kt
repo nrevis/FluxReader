@@ -47,14 +47,20 @@ class DialogueCorrectionStore(private val root: File) {
                 val count = input.readInt()
                 require(count in 0..MAX_EDITS)
                 val entries = ArrayList<DialogueCorrection>(count)
+                var previousEnd = 0
                 repeat(count) {
                     val reply = DialogueReply(input.readInt(), input.readInt())
                     val speaker = if (input.readBoolean()) input.readUTF() else null
                     require(speaker == null || validName(speaker))
                     require(reply.start >= 0 && reply.endExclusive <= text.length && reply.start < reply.endExclusive)
-                    require(entries.lastOrNull()?.reply?.endExclusive?.let { it <= reply.start } != false)
-                    require(DialogueReplyLocator.at(text, reply.start) == reply)
-                    entries += DialogueCorrection(reply, speaker)
+                    // Validate every serialized range, including obsolete parser boundaries.
+                    require(previousEnd <= reply.start)
+                    previousEnd = reply.endExclusive
+                    // The exact text still matches, but a newer parser may split this reply into
+                    // several speakers. Never expand or migrate the old edit onto those replies.
+                    if (DialogueReplyLocator.at(text, reply.start) == reply) {
+                        entries += DialogueCorrection(reply, speaker)
+                    }
                 }
                 require(input.read() == -1)
                 entries

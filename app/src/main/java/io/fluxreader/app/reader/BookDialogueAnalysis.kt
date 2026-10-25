@@ -2,7 +2,7 @@ package io.fluxreader.app.reader
 
 import java.security.MessageDigest
 
-enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT, SCENE_PRONOUN, GRAMMATICAL_SUBJECT }
+enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT, SCENE_PRONOUN, GRAMMATICAL_SUBJECT, NARRATIVE_CONTINUATION }
 
 enum class DialogueGender { MASCULINE, FEMININE }
 
@@ -86,6 +86,14 @@ object BookDialogueAnalyzer {
         ChapterDialogueIndex.fingerprint(text), SpeedDialogueAnalyzer.spans(text, checkpoint).map(::IndexedDialogue),
     )
 
+    /** Chapter-local names and grammatical genders are available without scanning the whole book. */
+    fun chapter(text: String, checkpoint: () -> Unit = {}): ChapterDialogueIndex {
+        val local = local(text, checkpoint)
+        checkpoint()
+        val roster = DialogueCharacterRoster.Builder().apply { observe(text, local) }.build()
+        return enrich(text, local, roster, checkpoint)
+    }
+
     fun enrich(text: String, local: ChapterDialogueIndex, roster: DialogueCharacterRoster, checkpoint: () -> Unit = {}): ChapterDialogueIndex {
         require(local.matches(text)) { "Dialogue offsets belong to different text" }
         val forms = roster.knownForms()
@@ -131,7 +139,8 @@ object BookDialogueAnalyzer {
                     val pronoun = roles.pronoun ?: SpeedDialogueAnalyzer.authorPronoun(remark)
                     if (pronoun != null) {
                         pronounSpeaker = if (mentions == null) null else pronounAntecedent(prefix, pronoun, mentions, roster)
-                        if (pronounSpeaker in roles.addressees || nameForms.mentions(prefix).map { it.name }.distinct().size > 1) pronounSpeaker = null
+                        if (pronounSpeaker in roles.addressees || pronounSpeaker in scene.departedNames(prefix) ||
+                            nameForms.mentions(prefix).map { it.name }.distinct().size > 1) pronounSpeaker = null
                         pronounEvidence = DialogueEvidence.PRONOUN_ANTECEDENT
                         if (pronounSpeaker == null) {
                             pronounSpeaker = scene.resolve(pronoun, roles.addressees)
@@ -151,7 +160,40 @@ object BookDialogueAnalyzer {
             resolved.span.speaker?.let { scene.record(it, span.start) }
             resolved
         }
-        return ChapterDialogueIndex(local.textFingerprint, result)
+        return ChapterDialogueIndex(local.textFingerprint, resumeInterruptedNarration(text, result, nameForms, checkpoint))
+    }
+
+    /** An ellipsis can resume a monologue only with matching explicit anchors on both sides
+     * and a single intervening narrative paragraph referring to that person's words. */
+    private fun resumeInterruptedNarration(
+        text: String, entries: List<IndexedDialogue>, forms: DialogueNameForms, checkpoint: () -> Unit,
+    ): List<IndexedDialogue> {
+        val speechReference = Regex("(?iu)(?<![\\p{L}])(?:слов(?:а|ами)?|реч(?:ь|и)|рассказ(?:а)?|объяснени(?:я|й)|реплик(?:а|и)|фраз(?:а|ы))(?:[\\s\\p{Zs}]+(?:профессора|доктора|капитана))?[\\s\\p{Zs}]+$")
+        val sceneChange = Regex("(?iu)^(?:наутро|на следующий день|тем временем|позже|через|вечером|глава)\\b")
+        val continuationStart = Regex("^[—–-]?[\\s\\p{Zs}]*(?:…|\\.{3})[\\s\\p{Zs}]*[\\p{Ll}]")
+        return entries.mapIndexed { i, entry ->
+            checkpoint()
+            val span = entry.span
+            val previous = entries.getOrNull(i - 1)
+            val next = entries.getOrNull(i + 1)
+            val speaker = previous?.span?.speaker
+            if (span.speaker != null || span.continuation || speaker == null || next?.span?.speaker != speaker ||
+                next.evidence !in setOf(DialogueEvidence.EXPLICIT, DialogueEvidence.GRAMMATICAL_SUBJECT) ||
+                previous.evidence == DialogueEvidence.NARRATIVE_CONTINUATION ||
+                span.start - previous.span.endExclusive !in 1..1400 || next.span.start - span.endExclusive !in 1..1600 ||
+                !continuationStart.containsMatchIn(text.substring(span.start, minOf(span.endExclusive, span.start + 30)))) return@mapIndexed entry
+            val precedingSpeech = text.substring(previous.span.start, previous.span.endExclusive).trimEnd().trimEnd('»', '”', '"')
+            if (!precedingSpeech.endsWith('…') && !precedingSpeech.endsWith("...")) return@mapIndexed entry
+            val gap = text.substring(previous.span.endExclusive, span.start)
+            val narration = gap.lineSequence().map(String::trim).filter(String::isNotEmpty).toList().singleOrNull()
+                ?: return@mapIndexed entry
+            if (narration.any { it in "«»\"“”" } || narration.first() in "—–-*" || sceneChange.containsMatchIn(narration)) return@mapIndexed entry
+            val sources = forms.mentions(narration).filter { mention ->
+                speechReference.containsMatchIn(narration.substring(0, mention.start))
+            }.map { it.name }.distinct()
+            if (sources.singleOrNull() == speaker) entry.copy(span = span.copy(speaker = speaker), evidence = DialogueEvidence.NARRATIVE_CONTINUATION)
+            else entry
+        }
     }
 
     private fun pronounAntecedent(prefix: String, pronoun: String, mentions: Regex, roster: DialogueCharacterRoster): String? {

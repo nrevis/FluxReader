@@ -39,6 +39,7 @@ import io.fluxreader.app.reader.BookSpeakerColorStore
 import io.fluxreader.app.reader.SpeakerTint
 import io.fluxreader.app.reader.BookContentRepository
 import io.fluxreader.app.reader.BookDialogueRepository
+import io.fluxreader.app.reader.BookDialogueAnalyzer
 import io.fluxreader.app.reader.ChapterDialogueIndex
 import io.fluxreader.app.reader.ReaderMemoryBudget
 import io.fluxreader.app.reader.ChapterSpeedOffset
@@ -2075,22 +2076,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         cancelBookDialogueAnalysis()
         val state = _speed.value
         val config = settings.value
-        if (_route.value != AppRoute.SPEED || !config.speedDialogueEnabled || !config.speedDialogueBookAnalysis) {
+        if (_route.value != AppRoute.SPEED || !config.speedDialogueEnabled) {
             _speed.value = state.copy(dialogueIndex = null, dialogueAnalysisStatus = null)
             return
         }
         val book = state.bookId?.let(libraryRepository::find) ?: return
         val outline = state.outline ?: return
-        if (book.format == BookFormat.PDF) {
-            _speed.value = state.copy(dialogueAnalysisStatus = "Анализ всей книги пока доступен для EPUB, FB2 и TXT")
-            return
-        }
         val generation = bookDialogueGeneration
         bookDialogueJob = viewModelScope.launch {
             try {
                 val displayedFingerprint = withContext(Dispatchers.Default) {
                     ChapterDialogueIndex.fingerprint(state.chapterText)
                 }
+                val chapterIndex = withContext(Dispatchers.Default) {
+                    val analysisContext = currentCoroutineContext()
+                    BookDialogueAnalyzer.chapter(state.chapterText) { analysisContext.ensureActive() }
+                }
+                val chapterColors = withContext(Dispatchers.IO) {
+                    speakerColorStore.ensure(book.id, chapterIndex.entries.mapNotNull { it.span.speaker })
+                }
+                val latest = _speed.value
+                if (generation != bookDialogueGeneration || _route.value != AppRoute.SPEED ||
+                    latest.bookId != book.id || latest.chapterIndex != state.chapterIndex || latest.loading) return@launch
+                _speed.value = latest.copy(dialogueIndex = chapterIndex,
+                    dialogueAnalysisStatus = if (config.speedDialogueBookAnalysis && book.format != BookFormat.PDF) "Анализ всей книги…" else null,
+                    speakerColors = if (chapterColors.revision >= latest.speakerColors.revision) chapterColors else latest.speakerColors)
+                if (!config.speedDialogueBookAnalysis || book.format == BookFormat.PDF) return@launch
                 bookDialogueRepository.analyze(book, outline, state.chapterIndex,
                     onChapter = { chapter, index ->
                         val colors = speakerColorStore.ensure(book.id, index.entries.mapNotNull { it.span.speaker })

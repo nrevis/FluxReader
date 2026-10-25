@@ -18,8 +18,8 @@ android {
         applicationId = "io.fluxreader.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 20121
-        versionName = "0.2.0-alpha.104"
+        versionCode = 20122
+        versionName = "0.2.0-alpha.105"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -30,7 +30,7 @@ android {
         buildConfig = true
     }
 
-    sourceSets.getByName("main").jniLibs.directories.add(layout.buildDirectory.dir("generated/speech/jniLibs").get().asFile.path)
+    sourceSets.getByName("main").jniLibs.setSrcDirs(listOf("src/main/jniLibs", layout.buildDirectory.dir("generated/speech/jniLibs")))
 
     buildTypes {
         getByName("release") {

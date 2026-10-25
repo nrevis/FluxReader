@@ -8,13 +8,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.104/FluxReader-0.2.0-alpha.104-release.apk"><strong>Скачать APK</strong></a> ·
-  <a href="https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.104">Что нового</a> ·
-  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.104/FluxReader-0.2.0-alpha.104-clean.zip">Исходники</a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.105/FluxReader-0.2.0-alpha.105-release.apk"><strong>Скачать APK</strong></a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.105">Что нового</a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.105/FluxReader-0.2.0-alpha.105-clean.zip">Исходники</a> ·
   <a href="docs/USER-GUIDE.md">Руководство</a>
 </p>
 
-<p align="center"><sub>Android 9+ · alpha.104 · Автор: n.revis</sub></p>
+<p align="center"><sub>Android 9+ · alpha.105 · Автор: n.revis</sub></p>
 
 ## Три способа читать
 
@@ -51,7 +51,7 @@
 
 ## Установка
 
-1. Скачайте **[APK alpha.104](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.104/FluxReader-0.2.0-alpha.104-release.apk)** и разрешите установку из выбранного источника в Android.
+1. Скачайте **[APK alpha.105](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.105/FluxReader-0.2.0-alpha.105-release.apk)** и разрешите установку из выбранного источника в Android.
 2. Добавьте книгу через **«Добавить»** в библиотеке.
 3. Для встроенной озвучки откройте **«Голос и озвучка → Встроенные → Скачать голоса»**.
 

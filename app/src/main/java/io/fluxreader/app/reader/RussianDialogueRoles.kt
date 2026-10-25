@@ -89,37 +89,146 @@ internal object RussianDialogueRoles {
 /** Names in quoted words never enter this bounded discourse state. */
 internal class DialogueScene(private val roster: DialogueCharacterRoster, private val forms: DialogueNameForms) {
     private data class Seen(val name: String, val paragraph: Int, val offset: Int)
+    private data class PresenceChange(val name: String, val offset: Int, val departed: Boolean)
     private val seen = mutableMapOf<String, Seen>()
+    private val departed = mutableMapOf<String, Int>()
     private var cursor = 0
     private var paragraph = 0
     private var blankLines = 0
     private val breakWords = Regex("(?iu)^(?:наутро|на следующий день|тем временем|позже|через несколько часов|вечером|глава[\\s\\p{Zs}]+[0-9]+)\\b")
+    private val word = Regex("[\\p{L}’'-]+")
+    private val motion = Regex("(?iu)\\b(?:уш[её]л|ушла|ушли|вышел|вышла|вышли|удалился|удалилась|удалились|покинул|покинула|покинули|вернулся|вернулась|вернулись|вош[её]л|вошла|вошли|приш[её]л|пришла|пришли|появился|появилась|появились)\\b")
+    private val exitVerbs = setOf("ушел", "ушла", "ушли", "вышел", "вышла", "вышли", "удалился", "удалилась", "удалились", "покинул", "покинула", "покинули")
+    private val motionAdverbs = setOf("тихо", "молча", "быстро", "медленно", "сразу", "сразу же", "тут", "же", "уже", "потом", "затем", "наконец", "вскоре", "решительно", "торопливо", "поспешно", "незаметно", "немедленно")
+    private val conditional = setOf("если", "бы", "не", "почти", "едва", "ли", "разве")
+
+    /** Departures in quoted speech and hypothetical/negated clauses do not alter presence. */
+    fun departedNames(text: String): Set<String> {
+        val names = linkedSetOf<String>()
+        for (change in presenceChanges(text)) {
+            if (change.departed) names += change.name else names -= change.name
+        }
+        return names
+    }
+
+    private fun withoutQuotes(text: String): String {
+        val result = text.toCharArray()
+        val closing = mutableListOf<Char>()
+        for ((i, c) in text.withIndex()) {
+            if (closing.isNotEmpty()) {
+                if (c != '\n') result[i] = ' '
+                when {
+                    c == closing.last() -> closing.removeAt(closing.lastIndex)
+                    c == '«' -> closing += '»'
+                    c == '“' -> closing += '”'
+                }
+            } else {
+                val end = when (c) { '«' -> '»'; '“' -> '”'; '"' -> '"'; else -> null }
+                if (end != null) { closing += end; result[i] = ' ' }
+            }
+        }
+        return String(result)
+    }
+
+    private fun presenceChanges(text: String): List<PresenceChange> {
+        if (text.length > 8192) return emptyList()
+        val unquoted = withoutQuotes(text)
+        val changes = mutableListOf<PresenceChange>()
+        var offset = 0
+        for (line in unquoted.split('\n')) {
+            // In dash dialogue, only alternating author clauses after the first spoken part count.
+            val trimmed = line.trimStart()
+            val leading = line.length - trimmed.length
+            val fragments = if (trimmed.firstOrNull() in listOf('—', '–', '-')) {
+                val bodyOffset = leading + 1
+                val body = line.substring(bodyOffset)
+                val separators = Regex("[\\s\\p{Zs}]+[—–-][\\s\\p{Zs}]+").findAll(body).toList()
+                separators.mapIndexedNotNull { index, separator ->
+                    if (index % 2 != 0) null else {
+                        val begin = separator.range.last + 1
+                        val end = separators.getOrNull(index + 1)?.range?.first ?: body.length
+                        body.substring(begin, end) to (offset + bodyOffset + begin)
+                    }
+                }
+            } else listOf(line to offset)
+            for ((fragment, fragmentOffset) in fragments) {
+                for (sentence in Regex("[^.!?…;\\n]+").findAll(fragment)) {
+                    val clause = sentence.value
+                    val mentions = forms.mentions(clause)
+                    for (verb in motion.findAll(clause)) {
+                        val prefix = clause.substring(0, verb.range.first)
+                        val prefixWords = word.findAll(prefix).map { it.value.lowercase().replace('ё', 'е') }.toList()
+                        if (prefixWords.any { it in conditional } || word.findAll(clause).any { it.value.lowercase() in setOf("бы", "если") }) continue
+                        val tail = clause.substring(verb.range.last + 1).trimStart().lowercase().replace('ё', 'е')
+                        // Common non-spatial senses must not evict a character from the scene.
+                        if (Regex("^(?:из\\s+(?:себя|положения|моды|печати|строя)|в\\s+(?:себя|мысли|раздумья))\\b").containsMatchIn(tail)) continue
+                        val speaker = RussianDialogueRoles.parse(clause, forms).speaker
+                        val candidates = mentions.filter { it.nominative && it.end <= verb.range.first }.filter { mention ->
+                            val before = word.findAll(clause.substring(0, mention.start)).map { it.value.lowercase() }.toList()
+                            val bridge = clause.substring(mention.end, verb.range.first)
+                            val bridgeWords = word.findAll(bridge).map { it.value.lowercase() }.toList()
+                            val direct = before.all { it in motionAdverbs } && bridgeWords.all { it in motionAdverbs }
+                            val attributed = mention.name == speaker && bridgeWords.all { it in motionAdverbs || it == "и" }
+                            direct || attributed
+                        }.map { it.name }.distinct()
+                        val name = candidates.singleOrNull() ?: continue
+                        val isExit = verb.value.lowercase().replace('ё', 'е') in exitVerbs
+                        changes += PresenceChange(name, fragmentOffset + sentence.range.first + verb.range.first, isExit)
+                    }
+                }
+            }
+            offset += line.length + 1
+        }
+        return changes.sortedBy { it.offset }
+    }
+
     fun advance(text: String, end: Int, checkpoint: () -> Unit = {}) {
         while (cursor < end) {
             checkpoint()
             val next = text.indexOf('\n', cursor).let { if (it < 0 || it > end) end else it }
             val line = text.substring(cursor, next).trim()
             if (line.isEmpty()) {
-                if (++blankLines >= 3) seen.clear()
+                if (++blankLines >= 3) { seen.clear(); departed.clear() }
             } else {
                 blankLines = 0; paragraph++
-                if (line.matches(Regex("(?:\\*[\\s\\p{Zs}]*){3,}|[—–-]{3,}")) || breakWords.containsMatchIn(line)) seen.clear()
+                if (line.matches(Regex("(?:\\*[\\s\\p{Zs}]*){3,}|[—–-]{3,}")) || breakWords.containsMatchIn(line)) {
+                    seen.clear(); departed.clear()
+                }
+                for (change in presenceChanges(line)) {
+                    if (change.departed) {
+                        seen.remove(change.name)
+                        departed[change.name] = cursor + change.offset
+                    } else {
+                        departed.remove(change.name)
+                        record(change.name, cursor + change.offset)
+                    }
+                }
                 if (line.length <= 4096 && line.first() !in "—–-«\"“" && line.none { it in "«»\"“”" }) {
                     val mentions = forms.mentions(line)
                     val head = mentions.firstOrNull { mention ->
                         mention.nominative && line.substring(0, mention.start).substringAfterLast(',').trim().isBlank()
                     }
-                    // A new referent needs a grammatical narrative anchor, not a stray capitalized object.
-                    if (head != null) for (mention in mentions) record(mention.name, cursor)
+                    // An object mention cannot silently restore a character who has left.
+                    if (head != null) for (mention in mentions) {
+                        if (mention.name !in departed) record(mention.name, cursor)
+                    }
                 }
             }
             cursor = next + 1
         }
         seen.entries.removeAll { paragraph - it.value.paragraph > 6 || end - it.value.offset > 2400 }
     }
-    fun record(name: String, offset: Int) { seen[name] = Seen(name, paragraph, offset) }
+    fun record(name: String, offset: Int) {
+        val departureOffset = departed[name]
+        if (departureOffset != null) {
+            // A later explicitly attributed line can establish that the person is back.
+            if (offset <= departureOffset) return
+            departed.remove(name)
+        }
+        seen[name] = Seen(name, paragraph, offset)
+    }
     fun resolve(pronoun: String, excluded: Set<String>): String? {
         val gender = if (pronoun == "она") DialogueGender.FEMININE else DialogueGender.MASCULINE
-        return seen.keys.filter { it !in excluded && roster.gender(it) == gender }.singleOrNull()
+        return seen.keys.filter { it !in excluded && it !in departed && roster.gender(it) == gender }.singleOrNull()
     }
 }

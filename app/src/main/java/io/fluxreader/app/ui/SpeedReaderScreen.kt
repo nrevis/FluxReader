@@ -600,10 +600,9 @@ fun SpeedReaderScreen(
     }
 
     speakerEditorReply?.let { reply ->
-        val automatic = if (settings.speedDialogueBookAnalysis) state.dialogueIndex?.at(reply.start)
-            ?: SpeedDialogueAnalyzer.at(state.chapterText, reply.start) else SpeedDialogueAnalyzer.at(state.chapterText, reply.start)
+        val automatic = state.dialogueIndex?.at(reply.start) ?: SpeedDialogueAnalyzer.at(state.chapterText, reply.start)
         val current = DialogueReplyLocator.resolve(state.chapterText, reply.start,
-            state.dialogueIndex.takeIf { settings.speedDialogueBookAnalysis }, state.dialogueCorrections)
+            state.dialogueIndex, state.dialogueCorrections)
         val candidates = remember(state.dialogueIndex, state.dialogueCorrections) {
             (state.dialogueIndex?.entries.orEmpty().mapNotNull { it.span.speaker } +
                 state.dialogueCorrections.mapNotNull { it.speaker }).distinct().sorted()
@@ -702,7 +701,7 @@ private fun SpeedViewport(
             settings.speedDialogueEnabled, settings.speedDialogueBookAnalysis) {
             if (settings.speedDialogueEnabled) state.chunk?.let {
                 DialogueReplyLocator.resolve(state.chapterText, it.startOffset,
-                    state.dialogueIndex.takeIf { settings.speedDialogueBookAnalysis }, state.dialogueCorrections)
+                    state.dialogueIndex, state.dialogueCorrections)
             } else null
         }
         val mainTextHeightPx = with(density) {

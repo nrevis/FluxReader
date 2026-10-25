@@ -1,5 +1,6 @@
 package io.fluxreader.app.reader
 
+import java.io.DataOutputStream
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
@@ -57,5 +58,76 @@ class DialogueCorrectionStoreTest {
         }
         assertEquals("Марк", store.read("one", 0, text).single().speaker)
         assertFalse(folder.root.listFiles()!!.any { it.extension == "tmp" })
+    }
+
+    @Test fun legacyCombinedReplyIsSkippedWithoutLosingOtherEditsOrAssigningBothNewSpeakers() {
+        val chapter = "— Вчера, — сказала Ольга.\n\n" +
+            "— Да, — сказала Нина. — Нет, — ответил Марк.\n\n" +
+            "— Позже, — сказал Игорь."
+        val before = DialogueReplyLocator.at(chapter, chapter.indexOf("Вчера"))!!
+        val after = DialogueReplyLocator.at(chapter, chapter.indexOf("Позже"))!!
+        // Version 1 files from the old parser combined both speech fragments in this paragraph.
+        // Build that binary layout directly: update() must not create an obsolete boundary.
+        val legacy = DialogueReply(chapter.indexOf("— Да,"), chapter.indexOf("— ответил Марк."))
+        val first = DialogueReplyLocator.at(chapter, chapter.indexOf("Да,"))!!
+        val second = DialogueReplyLocator.at(chapter, chapter.indexOf("Нет,"))!!
+        assertNotEquals(legacy, first)
+        assertNotEquals(legacy, second)
+        assertNotEquals(first, second)
+        val expected = listOf(DialogueCorrection(before, "Наблюдатель"), DialogueCorrection(after, null))
+        writeVersionOneFixture(chapter, listOf(expected.first(), DialogueCorrection(legacy, "Нина"), expected.last()))
+
+        val edits = DialogueCorrectionStore(folder.root).read("legacy", 3, chapter)
+        assertEquals(expected, edits)
+        val automatic = BookDialogueAnalyzer.local(chapter)
+        assertEquals("Наблюдатель", DialogueReplyLocator.resolve(chapter, chapter.indexOf("Вчера"), automatic, edits)?.speaker)
+        assertEquals("Нина", DialogueReplyLocator.resolve(chapter, chapter.indexOf("Да,"), automatic, edits)?.speaker)
+        assertEquals("Марк", DialogueReplyLocator.resolve(chapter, chapter.indexOf("Нет,"), automatic, edits)?.speaker)
+        assertNull(DialogueReplyLocator.resolve(chapter, chapter.indexOf("Позже"), automatic, edits)?.speaker)
+    }
+
+    @Test fun obsoleteParserBoundaryCannotHideAnOverlappingSerializedEntry() {
+        val chapter = "— Да, — сказала Нина. — Нет, — ответил Марк.\n\n— Позже, — сказал Игорь."
+        val legacy = DialogueReply(0, chapter.indexOf("— ответил Марк."))
+        val nested = DialogueReplyLocator.at(chapter, chapter.indexOf("Нет,"))!!
+        val after = DialogueReplyLocator.at(chapter, chapter.indexOf("Позже"))!!
+        assertNotEquals(legacy, DialogueReplyLocator.at(chapter, 0))
+        writeVersionOneFixture(chapter, listOf(
+            DialogueCorrection(legacy, "Нина"), DialogueCorrection(nested, "Марк"), DialogueCorrection(after, "Игорь"),
+        ))
+        assertTrue(DialogueCorrectionStore(folder.root).read("legacy", 3, chapter).isEmpty())
+    }
+
+    @Test fun malformedBinaryRangesStillRejectTheWholeFile() {
+        val first = DialogueReplyLocator.at(text, text.indexOf("Привет"))!!
+        val second = DialogueReplyLocator.at(text, text.indexOf("Пора"))!!
+        for (invalid in listOf(
+            DialogueReply(-1, 1),
+            DialogueReply(second.start, second.start),
+            DialogueReply(second.start + 1, second.start),
+            DialogueReply(second.start, text.length + 1),
+            DialogueReply(first.start, first.endExclusive),
+        )) {
+            writeVersionOneFixture(text, listOf(DialogueCorrection(first, "Нина"), DialogueCorrection(invalid, "Марк")))
+            assertTrue(invalid.toString(), DialogueCorrectionStore(folder.root).read("legacy", 3, text).isEmpty())
+        }
+        writeVersionOneFixture(text, listOf(DialogueCorrection(second, "Марк"), DialogueCorrection(first, "Нина")))
+        assertTrue(DialogueCorrectionStore(folder.root).read("legacy", 3, text).isEmpty())
+    }
+
+    private fun writeVersionOneFixture(chapter: String, entries: List<DialogueCorrection>) {
+        val digest = ChapterDialogueIndex.fingerprint(chapter)
+        val file = File(folder.root, ChapterDialogueIndex.fingerprint("legacy:3:$digest") + ".bin")
+        DataOutputStream(file.outputStream().buffered()).use { output ->
+            output.writeInt(1)
+            output.writeUTF(digest)
+            output.writeInt(entries.size)
+            for (entry in entries) {
+                output.writeInt(entry.reply.start)
+                output.writeInt(entry.reply.endExclusive)
+                output.writeBoolean(entry.speaker != null)
+                entry.speaker?.let(output::writeUTF)
+            }
+        }
     }
 }
