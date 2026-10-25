@@ -90,11 +90,11 @@ private val CyberpunkTypography = Typography(
 )
 
 @Composable
-fun FluxTheme(settings: ReaderSettings, content: @Composable () -> Unit) {
+fun FluxTheme(settings: ReaderSettings, systemBarsBackground: Color? = null, content: @Composable () -> Unit) {
     val systemDark = isSystemInDarkTheme()
     val scheme = readerColorScheme(settings, systemDark)
     val view = LocalView.current
-    val lightBars = isLightBackground(scheme.background)
+    val lightBars = isLightBackground(systemBarsBackground ?: scheme.background)
     SideEffect {
         view.context.findActivity()?.let { activity ->
             WindowCompat.getInsetsController(activity.window, view).apply {

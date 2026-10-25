@@ -8,6 +8,66 @@ class BookDialogueAnalysisTest {
         text, BookDialogueAnalyzer.local(text), DialogueCharacterRoster(names),
     )
 
+    private fun learnedRoster(vararg chapters: String): DialogueCharacterRoster {
+        val builder = DialogueCharacterRoster.Builder()
+        chapters.forEach { builder.observe(it, BookDialogueAnalyzer.local(it)) }
+        return builder.build()
+    }
+
+    @Test fun pronounUsesImmediatelyPrecedingNarrationAndLearnedGender() {
+        val roster = learnedRoster("— Да, — сказала Гермиона.", "— Хорошо, — сказал Гарри.")
+        val text = "Гермиона, однако, придерживалась менее радужных взглядов.\n\n" +
+            "— Если даже Дамблдор не сумел, — негромко сказала она, стоя с Гарри во дворе. — Крестражи…\n\n— Не слышала?"
+        val index = BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster)
+        assertEquals("Гермиона", index.at(text.indexOf("Если"))?.speaker)
+        assertEquals("Гермиона", index.at(text.indexOf("Крестражи"))?.speaker)
+        assertEquals(DialogueEvidence.PRONOUN_ANTECEDENT, index.entries.first().evidence)
+        assertNull(index.at(text.indexOf("сказала")))
+        assertNull(index.at(text.indexOf("Не слышала"))?.speaker)
+        assertTrue(index.matches(text))
+    }
+
+    @Test fun pronounAbstainsOnAmbiguityWrongGenderSceneBreakAndQuotedNames() {
+        val roster = learnedRoster("— Да, — сказала Анна.", "— Да, — сказала Мария.", "— Да, — сказал Борис.")
+        for (prefix in listOf("Анна и Мария остались во дворе.", "Борис остался во дворе.",
+            "Анна заговорила:\n\n***", "— Анна осталась во дворе.", "Анна читала «Борис».", "Она посмотрела в окно.", "В комнате ждали Анна.")) {
+            val text = "$prefix\n\n— Довольно! — сказала она. — Идём."
+            assertTrue(prefix, BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster).entries.takeLast(2).all { it.span.speaker == null })
+        }
+    }
+
+    @Test fun unknownOrConflictingGenderDoesNotGuessFromNameEnding() {
+        val text = "Саша остановилась.\n\n— Привет! — сказала она."
+        for (roster in listOf(DialogueCharacterRoster(listOf("Саша")),
+            learnedRoster("— Да, — сказал Саша.", "— Нет, — сказала Саша."))) {
+            assertNull(BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster).entries.single().span.speaker)
+        }
+        assertEquals("Саша", BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text),
+            learnedRoster("— Да, — сказала Саша.")).entries.single().span.speaker)
+    }
+
+    @Test fun masculineAndInvertedPronounsKeepOriginalOffsetsWithUnicodeSpaces() {
+        val roster = learnedRoster("— Да, — ответил Борис.")
+        val text = "Борис посмотрел в окно.\n\n— Идём! — он тихо ответил. — Уже пора.".replace(' ', '\u202f')
+        val index = BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster)
+        assertTrue(index.entries.all { it.span.speaker == "Борис" })
+        assertEquals(BookDialogueAnalyzer.local(text).entries.map { it.span.start to it.span.endExclusive },
+            index.entries.map { it.span.start to it.span.endExclusive })
+    }
+
+    @Test fun pronounsInsideQuotedSpeechAndAcrossNarrativeDoNotAssignNames() {
+        val roster = learnedRoster("— Да, — сказала Анна.")
+        for (text in listOf("Анна остановилась.\n\n— Она сказала, что всё хорошо.",
+            "Анна остановилась.\n\nЗа окном светало.\n\n— Да, — сказала она.")) {
+            assertTrue(BookDialogueAnalyzer.enrich(text, BookDialogueAnalyzer.local(text), roster).entries.all { it.span.speaker == null })
+        }
+    }
+
+    @Test fun genderEvidenceIsPartOfRosterCacheIdentity() {
+        assertNotEquals(learnedRoster("— Да, — сказала Саша.").fingerprint,
+            learnedRoster("— Да, — сказал Саша.").fingerprint)
+    }
+
     @Test fun callForSilenceChangesSpeakerAfterPreviousConversation() {
         val text = "— Что случилось? — спросил Рон.\n\nПрежде чем Гарри успел ответить, в класс вошёл Слизнорт и призвал всех к тишине.\n\n— Садитесь, прошу вас!"
         val index = enriched(text, listOf("Рон", "Гарри", "Слизнорт"))

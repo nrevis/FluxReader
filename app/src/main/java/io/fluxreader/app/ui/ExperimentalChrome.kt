@@ -66,32 +66,15 @@ internal fun CyberpunkDeviceFrame(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val pal = LocalExperimentalColors.current
-    // Immersive draws only the active display, not decorative lateral chassis rails.
     Box(Modifier.fillMaxSize().background(pal.background)) {
-        // Decorations change but the child route keeps its composition identity.
         if (!immersive) {
-        Image(
-            painter = painterResource(R.drawable.cyberpunk_surface_texture),
-            contentDescription = null,
-            modifier = Modifier.matchParentSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.23f,
-        )
-        Canvas(Modifier.matchParentSize()) {
-            val inset = 7.dp.toPx()
-            drawRect(pal.accent.copy(alpha = 0.72f), Offset(inset, inset),
-                Size(size.width - inset * 2, size.height - inset * 2), style = Stroke(1.dp.toPx()))
-            drawLine(pal.secondary.copy(alpha = 0.75f), Offset(0f, 26.dp.toPx()),
-                Offset(0f, 90.dp.toPx()), strokeWidth = 3.dp.toPx())
-            drawLine(pal.accent.copy(alpha = 0.75f), Offset(size.width, size.height - 96.dp.toPx()),
-                Offset(size.width, size.height - 20.dp.toPx()), strokeWidth = 3.dp.toPx())
+            DeviceFrameRails()
         }
-        } // Decorative rails/grid only.
         Box(
             Modifier.fillMaxSize()
-                .padding(horizontal = if (immersive) 0.dp else 8.dp,
-                    vertical = if (immersive) 0.dp else 8.dp)
-                .then(if (ImmersiveLayoutPolicy.reserveSystemInsets(immersive)) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier),
+                .then(if (ImmersiveLayoutPolicy.reserveSystemInsets(immersive)) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                .padding(horizontal = if (immersive) 0.dp else 8.dp, vertical = if (immersive) 0.dp else 4.dp)
+                .background(pal.background),
             propagateMinConstraints = true,
             content = content,
         )

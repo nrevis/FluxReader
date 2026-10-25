@@ -176,6 +176,32 @@ object SpeedDialogueAnalyzer {
         return DialogueAttribution(beforeName ?: afterName)
     }
 
+    /** Reuses the attribution grammar; only a subject pronoun beside the speech verb qualifies. */
+    internal fun authorPronoun(raw: String): String? {
+        val text = raw.trim().trimStart('—', '–', '-', ' ', '\u00a0', '\u202f')
+        if (attribution(text, allowAction = true)?.speaker != null) return null
+        val verb = speechVerb.find(text) ?: actionVerb.find(text) ?: return null
+        if (attribution(text, allowAction = true) == null) return null
+        val after = words.findAll(text.substring(verb.range.last + 1)).map {
+            it.value.trim(',', '.', '!', '?', '…').lowercase()
+        }.dropWhile { it in attributionAdverbs }.firstOrNull()
+        if (after in setOf("он", "она")) return after
+        val before = words.findAll(text.substring(0, verb.range.first)).map { it.value.lowercase() }.toList()
+        return before.firstOrNull()?.takeIf { it in setOf("он", "она") && before.drop(1).all { w -> w in attributionAdverbs } }
+    }
+
+    /** Gender comes from an explicit author verb, never from a guessed name suffix. */
+    internal fun authorGender(raw: String, speaker: String): DialogueGender? {
+        val text = raw.trim().trimStart('—', '–', '-', ' ', '\u00a0', '\u202f')
+        if (attribution(text, allowAction = true)?.speaker != speaker) return null
+        val verb = (speechVerb.find(text) ?: actionVerb.find(text))?.value?.lowercase() ?: return null
+        return when {
+            verb.endsWith("ла") || verb.endsWith("лась") -> DialogueGender.FEMININE
+            verb.endsWith("л") || verb.endsWith("лся") || verb.endsWith("ёс") || verb.endsWith("ес") -> DialogueGender.MASCULINE
+            else -> null
+        }
+    }
+
     private fun cleanName(raw: String): String? {
         val parts = raw.split(Regex(SPACE + "+")).dropWhile { it in notNames || it.lowercase() in attributionAdverbs }
         if (parts.isEmpty() || parts.first() in notNames || obliqueName.matches(parts.first())) return null

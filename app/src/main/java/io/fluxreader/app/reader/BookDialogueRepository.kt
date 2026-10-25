@@ -34,7 +34,7 @@ class BookDialogueRepository(cacheRoot: File, private val content: BookContentRe
         fun sourceToken() = ChapterDialogueIndex.fingerprint("${book.id}:${book.contentHash}:${file.length()}:${file.lastModified()}")
         val source = sourceToken()
         val order = outline.chapters.indices.sortedBy { if (it == currentChapter) -1 else it }
-        val names = linkedSetOf<String>()
+        val characters = DialogueCharacterRoster.Builder()
         val context = currentCoroutineContext()
         val checkpoint = { context.ensureActive() }
         // First render of the selected chapter does not wait for the remaining book.
@@ -46,15 +46,12 @@ class BookDialogueRepository(cacheRoot: File, private val content: BookContentRe
             val local = cache.read(source, chapterKey, "local", text) ?: withContext(Dispatchers.Default) {
                 BookDialogueAnalyzer.local(text, checkpoint)
             }.also { cache.write(source, chapterKey, "local", it) }
-            for (entry in local.entries) {
-                val speaker = entry.span.speaker
-                if (speaker != null && names.size < 2048) names += speaker
-            }
+            characters.observe(text, local)
             if (index == currentChapter) onChapter(index, local)
             onProgress(BookDialogueProgress(1, done + 1, order.size))
             yield()
         }
-        val roster = DialogueCharacterRoster(names)
+        val roster = characters.build()
         for ((done, index) in order.withIndex()) {
             checkpoint()
             check(sourceToken() == source) { "Файл книги изменился. Откройте книгу повторно." }

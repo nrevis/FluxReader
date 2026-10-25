@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -433,12 +434,12 @@ fun SpeedReaderScreen(
                         }
                     }
                 } else {
-                    // Shared 56dp layout for all palettes. The parent above
+                    // Shared compact layout for all palettes. The parent above
                     // handles system bars only for the standard, standalone UI.
                     val themedChrome = settings.useWastelandDesign || settings.useCyberpunkDesign
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                            .background(background).padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .background(background).padding(horizontal = 6.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(onClick = leaveSpeed, modifier = Modifier.size(48.dp)) {
@@ -450,13 +451,12 @@ fun SpeedReaderScreen(
                                     tint = textColor, modifier = Modifier.size(22.dp))
                             }
                         }
-                        Text(
-                            listOf(title, section).filter { it.isNotBlank() }
-                                .joinToString(" · ").ifBlank { "Скорочтение" },
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = textColor, style = MaterialTheme.typography.titleSmall,
-                        )
+                        Column(Modifier.weight(1f).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(title.ifBlank { "Скорочтение" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                color = textColor.copy(alpha = .62f), style = MaterialTheme.typography.labelSmall)
+                            Text(section.ifBlank { "Скорочтение" }, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                color = textColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        }
                         IconButton(
                             onClick = { viewModel.speedPause(); settingsPanel = SpeedSettingsPanel.HUB },
                             modifier = Modifier.size(48.dp),
@@ -1265,7 +1265,7 @@ private fun SpeedProgress(
         remainingSeconds >= 3600 -> "%d:%02d:%02d".format(remainingSeconds / 3600, (remainingSeconds % 3600) / 60, remainingSeconds % 60)
         else -> "%d:%02d".format(remainingSeconds / 60, remainingSeconds % 60)
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (settings.speedProgressMode == SpeedProgressMode.CHAPTER || settings.speedProgressMode == SpeedProgressMode.BOTH) {
             LinearProgressIndicator(
                 progress = { chapterProgress },
@@ -1283,7 +1283,7 @@ private fun SpeedProgress(
             )
         }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().padding(vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             val progressLabel = when (settings.speedProgressMode) {

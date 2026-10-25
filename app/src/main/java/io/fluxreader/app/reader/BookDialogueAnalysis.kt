@@ -2,7 +2,9 @@ package io.fluxreader.app.reader
 
 import java.security.MessageDigest
 
-enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION }
+enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT }
+
+enum class DialogueGender { MASCULINE, FEMININE }
 
 data class IndexedDialogue(val span: SpeedDialogueSpan, val evidence: DialogueEvidence = DialogueEvidence.EXPLICIT)
 
@@ -32,10 +34,40 @@ class ChapterDialogueIndex(val textFingerprint: String, val entries: List<Indexe
 }
 
 /** Only names observed in explicit attributions enter the roster. Name merging needs morphology. */
-class DialogueCharacterRoster(names: Collection<String>) {
+class DialogueCharacterRoster(
+    names: Collection<String>,
+    genderHints: Map<String, Set<DialogueGender>> = emptyMap(),
+) {
     val names = names.filter { it.length in 2..100 }.distinct().sorted().take(2048)
-    val fingerprint = ChapterDialogueIndex.fingerprint(this.names.joinToString("\n"))
+    private val genders = this.names.mapNotNull { name ->
+        genderHints[name]?.singleOrNull()?.let { name to it }
+    }.toMap()
+    val fingerprint = ChapterDialogueIndex.fingerprint(this.names.joinToString("\n") { "$it:${genders[it]}" })
     internal fun knownForms(): Set<String> = names.toSet()
+    internal fun gender(name: String): DialogueGender? = genders[name]
+
+    /** Bounded streaming collection: conflicting gender evidence is retained as ambiguity. */
+    class Builder {
+        private val names = linkedSetOf<String>()
+        private val genders = mutableMapOf<String, MutableSet<DialogueGender>>()
+        fun observe(text: String, index: ChapterDialogueIndex) {
+            for ((position, entry) in index.entries.withIndex()) {
+                val speaker = entry.span.speaker ?: continue
+                if (names.size >= 2048 && speaker !in names) continue
+                names += speaker
+                val end = text.indexOf('\n', entry.span.endExclusive).let { if (it < 0) text.length else it }
+                val next = index.entries.getOrNull(position + 1)?.span?.start ?: end
+                val remarkEnd = minOf(end, next)
+                if (remarkEnd - entry.span.endExclusive !in 1..512) continue
+                val remark = text.substring(entry.span.endExclusive, remarkEnd)
+                SpeedDialogueAnalyzer.authorGender(remark, speaker)?.let {
+                    genders.getOrPut(speaker) { linkedSetOf() } += it
+                }
+            }
+        }
+        fun build() = DialogueCharacterRoster(names, genders)
+        val size: Int get() = names.size
+    }
 }
 
 /**
@@ -66,31 +98,55 @@ object BookDialogueAnalyzer {
         )
         var paragraph = -1
         var introduction: String? = null
-        val result = local.entries.map { entry ->
+        var pronounSpeaker: String? = null
+        val result = local.entries.mapIndexed { position, entry ->
             checkpoint()
             val span = entry.span
-            if (span.speaker != null) {
-                entry
-            } else {
-                val paragraphEnd = text.indexOf('\n', span.start).let { if (it < 0) text.length else it }
-                // An unresolved author's remark may introduce another speaker (e.g. «сказал он»).
-                // Do not override it using the preceding narrative introduction.
-                if (span.continuation || span.endExclusive < paragraphEnd) return@map entry
-                val begin = text.lastIndexOf('\n', (span.start - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-                if (begin != paragraph) {
-                    paragraph = begin
-                    var previousEnd = begin
-                    while (previousEnd > 0 && text[previousEnd - 1].isWhitespace()) previousEnd--
-                    val previousStart = text.lastIndexOf('\n', previousEnd - 1) + 1
-                    val prefix = if (previousEnd - previousStart <= 4096) text.substring(previousStart, previousEnd) else ""
-                    introduction = if (mentions == null) null else introducedSpeaker(prefix, mentions, roster)
+            val paragraphEnd = text.indexOf('\n', span.start).let { if (it < 0) text.length else it }
+            val begin = text.lastIndexOf('\n', (span.start - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+            if (begin != paragraph) {
+                paragraph = begin
+                var previousEnd = begin
+                while (previousEnd > 0 && text[previousEnd - 1].isWhitespace()) previousEnd--
+                val previousStart = text.lastIndexOf('\n', previousEnd - 1) + 1
+                val prefix = if (previousEnd - previousStart <= 4096) text.substring(previousStart, previousEnd) else ""
+                introduction = if (mentions == null) null else introducedSpeaker(prefix, mentions, roster)
+                pronounSpeaker = null
+                // The local parser has already separated speech from the author's remark.
+                // Look only inside that gap; names or pronouns in the quoted words never count.
+                val next = local.entries.getOrNull(position + 1)?.span?.start ?: paragraphEnd
+                val remarkEnd = minOf(next, paragraphEnd)
+                if (span.speaker == null && remarkEnd - span.endExclusive in 1..512 && mentions != null) {
+                    val remark = text.substring(span.endExclusive, remarkEnd)
+                    val pronoun = SpeedDialogueAnalyzer.authorPronoun(remark)
+                    if (pronoun != null) pronounSpeaker = pronounAntecedent(prefix, pronoun, mentions, roster)
                 }
-                if (introduction == null) entry else entry.copy(
-                    span = span.copy(speaker = introduction), evidence = DialogueEvidence.SCENE_INTRODUCTION,
+            }
+            when {
+                span.speaker != null -> entry
+                pronounSpeaker != null -> entry.copy(
+                    span = span.copy(speaker = pronounSpeaker), evidence = DialogueEvidence.PRONOUN_ANTECEDENT,
                 )
+                // An unresolved author's remark must not inherit a contradictory introduction.
+                span.continuation || span.endExclusive < paragraphEnd || introduction == null -> entry
+                else -> entry.copy(span = span.copy(speaker = introduction), evidence = DialogueEvidence.SCENE_INTRODUCTION)
             }
         }
         return ChapterDialogueIndex(local.textFingerprint, result)
+    }
+
+    private fun pronounAntecedent(prefix: String, pronoun: String, mentions: Regex, roster: DialogueCharacterRoster): String? {
+        val line = prefix.trim()
+        if (line.isBlank() || line.first() in "—–-«\"“" || line.any { it in "«»\"“”" }) return null
+        // One immediately preceding narrative paragraph, one known character. No search through
+        // earlier scenes, inferred turn-taking, or choosing the nearest name among several people.
+        val found = mentions.findAll(line).toList()
+        val candidate = found.map { it.value }.distinct().singleOrNull() ?: return null
+        // A sole name used as an object ("В комнате ждали Анну") is not a subject anchor.
+        val leading = line.substring(0, found.first().range.first)
+        if (leading.isNotBlank() && !title.matches(leading)) return null
+        val expected = if (pronoun == "она") DialogueGender.FEMININE else DialogueGender.MASCULINE
+        return candidate.takeIf { roster.gender(it) == expected }
     }
 
     private fun introducedSpeaker(prefix: String, mentions: Regex, roster: DialogueCharacterRoster): String? {

@@ -26,7 +26,7 @@ checks = {
         ("fullscreen context compact", 'compact = immersiveMode' in speed),
         ("context excerpt max 3 lines in full screen", 'maxLines = if (compact) 3 else 4' in speed),
         ("speed controls collapsed by default", 'var speedTuningExpanded by rememberSaveable { mutableStateOf(false) }' in speed),
-        ("speed top bar <=56dp", 'Modifier.fillMaxWidth().height(56.dp)' in speed),
+        ("compact header grows for chapter text / font scaling", 'Modifier.fillMaxWidth().heightIn(min = 56.dp)' in speed and 'Text(section.ifBlank' in speed),
         ("next-word preview fits before rendering", 'nextLeftPx + previewWidthPx + gapPx < maxWidthPx' in speed),
         ("folder tiles fixed height", '.height(if (compact) 112.dp else 150.dp)' in lib),
         ("folder text contrasts with themed surface", 'if (themed) LocalFluxThemeMode.current.chromeText else MaterialTheme.colorScheme.onSurface' in lib),

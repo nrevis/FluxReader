@@ -53,11 +53,7 @@ internal val WastelandMetal = Color(0xFF3A2918)
 internal val WastelandRust = Color(0xFFA84D20)
 internal val WastelandOutline = Color(0xFF7A6537)
 
-/**
- * Full-screen experimental shell for the Wasteland theme.
- * It intentionally reserves a small physical bezel around the real UI rather than merely
- * recolouring Material components. The layer is static and has no pointer input.
- */
+/** Rounded terminal rails start below the camera/status row; the content slot stays stable. */
 @Composable
 internal fun WastelandDeviceFrame(
     modifier: Modifier = Modifier,
@@ -65,113 +61,15 @@ internal fun WastelandDeviceFrame(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val pal = LocalExperimentalColors.current
-    // Immersive means edge-to-edge glass: NO side metal, screws, hazard stripes or bezel.
-    // The Reader/Speed Reader itself handles the actual camera cutout.
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(if (immersive) pal.background else Color(0xFF171007)),
-    ) {
-        // Keep the routed Reader/SpeedReader in this SAME slot when immersive
-        // toggles; a separate fullscreen branch destroyed its rememberSaveable state.
+    Box(modifier.fillMaxSize().background(pal.background)) {
         if (!immersive) {
-        Image(
-            painter = painterResource(R.drawable.wasteland_surface_texture),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.36f,
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            val px = density
-            val bezel = 10f * px
-            val inner = 13f * px
-            val screw = 3.4f * px
-            val amber = pal.accent.copy(alpha = 0.52f)
-            val dark = Color(0xFF0A0805)
-            val metal = WastelandMetal.copy(alpha = 0.86f)
-            val rust = WastelandRust.copy(alpha = 0.55f)
-
-            // Thick physical shell.
-            drawRect(metal, Offset.Zero, Size(size.width, bezel))
-            drawRect(metal, Offset(0f, size.height - bezel), Size(size.width, bezel))
-            drawRect(metal, Offset.Zero, Size(bezel, size.height))
-            drawRect(metal, Offset(size.width - bezel, 0f), Size(bezel, size.height))
-            drawRect(
-                color = Color(0xFF11150B),
-                topLeft = Offset(inner, inner),
-                size = Size(size.width - inner * 2f, size.height - inner * 2f),
-                style = Stroke(width = 1.6f * px),
-            )
-            drawRect(
-                color = amber,
-                topLeft = Offset(inner + 1.5f * px, inner + 1.5f * px),
-                size = Size(size.width - (inner + 1.5f * px) * 2f, size.height - (inner + 1.5f * px) * 2f),
-                style = Stroke(width = 0.9f * px),
-            )
-
-            // Top/bottom vent slots, matching the reference's industrial terminal enclosure.
-            val ventYTop = 2.7f * px
-            val ventYBottom = size.height - 6.2f * px
-            val ventStart = size.width * 0.35f
-            val ventEnd = size.width * 0.65f
-            val ventGap = 4.4f * px
-            var x = ventStart
-            while (x <= ventEnd) {
-                drawLine(dark, Offset(x, ventYTop), Offset(x, ventYTop + 4.2f * px), strokeWidth = 2.1f * px)
-                drawLine(dark, Offset(x, ventYBottom), Offset(x, ventYBottom + 3.5f * px), strokeWidth = 2.1f * px)
-                x += ventGap
-            }
-
-            // Four screws with a rusted slot.
-            listOf(
-                Offset(5.1f * px, 5.1f * px),
-                Offset(size.width - 5.1f * px, 5.1f * px),
-                Offset(5.1f * px, size.height - 5.1f * px),
-                Offset(size.width - 5.1f * px, size.height - 5.1f * px),
-            ).forEach { c ->
-                drawCircle(dark, screw + 1.1f * px, c)
-                drawCircle(Color(0xFF8B7448), screw, c, style = Stroke(0.9f * px))
-                drawLine(rust, Offset(c.x - 1.8f * px, c.y), Offset(c.x + 1.8f * px, c.y), 0.9f * px)
-            }
-
-            // Amber power lamp centered at the bottom.
-            val lampW = 27f * px
-            val lampH = 3.7f * px
-            val lampX = (size.width - lampW) / 2f
-            val lampY = size.height - 7.1f * px
-            drawRoundRect(Color(0xFF1D1204), Offset(lampX - 2f * px, lampY - 1.2f * px), Size(lampW + 4f * px, lampH + 2.4f * px), CornerRadius(1.3f * px, 1.3f * px))
-            drawRoundRect(pal.accent.copy(alpha = 0.90f), Offset(lampX, lampY), Size(lampW, lampH), CornerRadius(1.1f * px, 1.1f * px))
-
-            // Sparse hazard stripes on shell corners.
-            val hazard = pal.accent.copy(alpha = 0.55f)
-            val stripe = 9f * px
-            repeat(4) { i ->
-                val y = 18f * px + i * stripe
-                drawLine(hazard, Offset(0f, y), Offset(bezel, y + 6f * px), 2.5f * px)
-                drawLine(hazard, Offset(size.width - bezel, size.height - y), Offset(size.width, size.height - y - 6f * px), 2.5f * px)
-            }
+            DeviceFrameRails()
         }
-
-        } // Decorative chassis only; do not reconstruct the routed subtree.
-
-        // The active CRT surface is inset from the metal shell.
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                // In ordinary mode the OS owns the status/navigation zones. In
-                // immersive mode those bars vanish: do NOT reserve their insets in
-                // the decorative shell. The individual reader guards only the
-                // real center camera cutout using its own minimal content padding.
-                .padding(horizontal = if (immersive) 0.dp else 10.dp,
-                    vertical = if (immersive) 0.dp else 10.dp)
+            Modifier.fillMaxSize()
                 .then(if (ImmersiveLayoutPolicy.reserveSystemInsets(immersive)) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                .padding(horizontal = if (immersive) 0.dp else 10.dp, vertical = if (immersive) 0.dp else 4.dp)
                 .background(pal.background),
-            // Critical for route roots such as Scaffold: Box normally measures children with
-            // loose minimum constraints. That allowed the alpha.59 Scaffold to collapse to the
-            // height of its bars, placing the bottom rail near the top and leaving no viewport
-            // for the library. Propagating the full minimum constraints makes every routed
-            // screen occupy the complete CRT viewport.
             propagateMinConstraints = true,
             content = content,
         )

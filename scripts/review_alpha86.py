@@ -13,7 +13,7 @@ checks = {
     "scaffold uses the guarded modifier": "Modifier.fillMaxSize().then(standaloneSafeArea)" in speed,
     "fullscreen has its own viewport": speed.index("if (isFullscreen) {") < speed.index("val standaloneSafeArea"),
     "experimental frames still own their safe area": "WastelandDeviceFrame(immersive = immersiveReader)" in app and "CyberpunkDeviceFrame(immersive = immersiveReader)" in app,
-    "single Speed toolbar layout": speed.count("height(56.dp)") >= 1 and "TopAppBar(" not in speed,
+    "single Speed toolbar layout": speed.count("heightIn(min = 56.dp)") == 1 and "TopAppBar(" not in speed,
     "Speed voice toggle exists": "onClick = toggleVoice" in speed or "onNarration = toggleVoice" in speed,
     "Speed can play speech": "speech.start(state.chapterText" in speed,
     "Reader bottom bar takes no voice callbacks": "onNarrationToggle" not in reader and "narrationPlaying:" not in reader,

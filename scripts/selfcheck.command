@@ -1476,7 +1476,7 @@ grep -q 'WastelandLibraryFilter' app/src/main/java/io/fluxreader/app/ui/LibraryS
 grep -q 'contentDescription = "Меню чтения"' app/src/main/java/io/fluxreader/app/ui/ReaderScreen.kt || { echo "❌ alpha.82: compact Reader overflow missing"; exit 173; }
 grep -q 'ExperimentalPanel' app/src/main/java/io/fluxreader/app/ui/ReaderScreen.kt || { echo "❌ alpha.59: Reader Wasteland controls missing"; exit 174; }
 grep -q 'ExperimentalTopBar' app/src/main/java/io/fluxreader/app/ui/PdfReaderScreen.kt || { echo "❌ alpha.59: PDF Wasteland header missing"; exit 175; }
-grep -q 'Modifier.fillMaxWidth().height(56.dp)' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt || { echo "❌ alpha.77: compact Speed Reader header missing"; exit 176; }
+grep -q 'Modifier.fillMaxWidth().heightIn(min = 56.dp)' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt || { echo "❌ alpha.77: compact Speed Reader header missing"; exit 176; }
 grep -q 'ExperimentalPanel' app/src/main/java/io/fluxreader/app/ui/SpeedReaderScreen.kt || { echo "❌ alpha.59: Speed Reader Wasteland hardware controls missing"; exit 177; }
 grep -q 'ExperimentalTopBar' app/src/main/java/io/fluxreader/app/ui/SettingsScreen.kt || { echo "❌ alpha.59: Settings Wasteland header missing"; exit 178; }
 grep -q 'ExperimentalPanel' app/src/main/java/io/fluxreader/app/ui/SettingsPrimitives.kt || { echo "❌ alpha.59: Settings Wasteland panels missing"; exit 179; }

@@ -5,7 +5,7 @@ ui=root/'app/src/main/java/io/fluxreader/app/ui'
 s=(ui/'SpeedReaderScreen.kt').read_text()
 r=(ui/'ReaderPreferences.kt').read_text()
 checks={
- 'single shared 56dp toolbar':s.count('Shared 56dp layout for all palettes')==1,
+ 'single shared compact toolbar':s.count('heightIn(min = 56.dp)')==1,
  'standard/experimental same speed container': 'containerColor = background,' in s,
  'no heavyweight standalone standard top bar': 'TopAppBar(' not in s,
  'fullscreen Speed Reader shares viewport': s.count('SpeedViewport(')>=3,

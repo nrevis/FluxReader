@@ -9,6 +9,7 @@ TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 kotlinc \
   app/src/main/java/io/fluxreader/app/reader/SpeedDialogueAnalyzer.kt \
+  app/src/main/java/io/fluxreader/app/reader/BookDialogueAnalysis.kt \
   app/src/main/java/io/fluxreader/app/reader/SpeedDialoguePlayback.kt \
   app/src/main/java/io/fluxreader/app/reader/SpeedDialogueHyphenRun.kt \
   app/src/main/java/io/fluxreader/app/reader/SpeedReaderCursor.kt \

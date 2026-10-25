@@ -1,6 +1,8 @@
 package io.fluxreader.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -48,7 +50,9 @@ fun FluxReaderApp(viewModel: AppViewModel) {
 
     if (route != AppRoute.LIBRARY) BackHandler { viewModel.navigateBack() }
 
-    FluxTheme(settings) {
+    val speedSystemBackground = if (route == AppRoute.SPEED && !settings.useWastelandDesign &&
+        !settings.useCyberpunkDesign && !settings.speedUseReaderTheme) Color(settings.speedBackgroundColorArgb) else null
+    FluxTheme(settings, systemBarsBackground = speedSystemBackground) {
         // Reader and Speed Reader explicitly report their immersive state to the
         // ancestor device shell. System-bar visibility alone is not an inset contract:
         // safeDrawing may still reserve the display-cutout/status band.
@@ -130,7 +134,7 @@ fun FluxReaderApp(viewModel: AppViewModel) {
             }
         }
 
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(speedSystemBackground?.let { Modifier.background(it) } ?: Modifier)) {
             when {
                 settings.useWastelandDesign -> WastelandDeviceFrame(immersive = immersiveReader) {
                     routeContent()
@@ -144,6 +148,7 @@ fun FluxReaderApp(viewModel: AppViewModel) {
                 }
                 else -> routeContent()
             }
+            DeviceStatusCrown(immersiveReader, settings.activeUiTheme.isExperimentalChrome, speedSystemBackground)
             SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(
