@@ -6,6 +6,10 @@ object SpeedSpeechText {
 
     data class Piece(val start: Int, val end: Int, val text: String)
 
+    /** Offline neural voices have phrase boundaries, not measured word timestamps. */
+    fun displayChunk(piece: Piece): SpeedChunk = SpeedChunk(
+        piece.text.split(Regex("\\s+")).filter { it.isNotBlank() }, piece.start, piece.end, -1)
+
     fun next(text: String, from: Int, limit: Int = LIMIT): Piece? {
         var start = from.coerceIn(0, text.length)
         while (start < text.length && text[start].isWhitespace()) start++

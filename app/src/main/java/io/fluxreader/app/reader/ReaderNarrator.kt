@@ -13,9 +13,14 @@ import io.fluxreader.app.data.ReaderSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.Locale
 
-/** Uses only user-installed Android TTS engines; no remote text upload by Flux Reader. */
+/** Android voices and a separately downloaded in-process offline backend. */
 data class NarrationVoice(val name: String, val language: String, val quality: Int, val needsNetwork: Boolean)
 
 data class NarrationStatus(
@@ -28,9 +33,15 @@ data class NarrationStatus(
     val voices: List<NarrationVoice> = emptyList(),
     val currentLanguage: String = "ru",
     val error: String? = null,
+    val preparing: Boolean = false,
 )
 
 class ReaderNarrator(context: Context) {
+    private val appContext = context.applicationContext
+    private val store = BuiltInVoiceStore.get(appContext)
+    private val builtIn = BuiltInSpeechPlayer(appContext)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var androidReady = false
     private val main = Handler(Looper.getMainLooper())
     private val _status = MutableStateFlow(NarrationStatus())
     val status: StateFlow<NarrationStatus> = _status.asStateFlow()
@@ -54,6 +65,14 @@ class ReaderNarrator(context: Context) {
     var onChapterComplete: (() -> Unit)? = null
 
     init {
+        scope.launch {
+            store.state.collect {
+                if (BuiltInVoiceCatalog.isBuiltIn(preferred.narrationVoiceId)) {
+                    if (!it.installed && _status.value.playing) pause()
+                    _status.value = _status.value.copy(ready = it.installed && !it.busy)
+                }
+            }
+        }
         engine = TextToSpeech(context.applicationContext) { code ->
             main.post {
                 if (isClosing) return@post
@@ -92,22 +111,32 @@ class ReaderNarrator(context: Context) {
                     val voices = tts.voices.orEmpty().map {
                         NarrationVoice(it.name, it.locale.toLanguageTag(), it.quality, it.isNetworkConnectionRequired)
                     }.sortedWith(compareBy<NarrationVoice> { it.needsNetwork }.thenByDescending { it.quality }.thenBy { it.language }.thenBy { it.name })
-                    _status.value = _status.value.copy(ready = true, voices = voices, error = null)
+                    androidReady = true
+                    _status.value = _status.value.copy(ready = if (usesBuiltIn()) store.state.value.installed else true, voices = voices,
+                        error = if (usesBuiltIn()) _status.value.error else null)
                     configure()
-                    if (pendingPlay) { pendingPlay = false; play() }
+                    if (pendingPlay && !usesBuiltIn()) { pendingPlay = false; play() }
                 } else {
-                    fail("Озвучивание недоступно: установите или включите речевой движок Android")
+                    if (!usesBuiltIn()) fail("Голос Android недоступен. Можно скачать встроенные голоса")
                 }
             }
         }
     }
 
     fun setPreferences(settings: ReaderSettings) {
+        val changed = preferred.narrationVoiceId != settings.narrationVoiceId ||
+            preferred.narrationRate != settings.narrationRate || preferred.narrationPitch != settings.narrationPitch
+        if (changed) { pause(); builtIn.stop() }
         preferred = settings
+        _status.value = _status.value.copy(ready = if (usesBuiltIn()) store.state.value.installed && !store.state.value.busy else androidReady,
+            error = if (changed) null else _status.value.error, preparing = if (changed) false else _status.value.preparing)
         if (_status.value.ready) configure()
     }
 
+    private fun usesBuiltIn() = BuiltInVoiceCatalog.isBuiltIn(preferred.narrationVoiceId)
+
     private fun configure() {
+        if (usesBuiltIn()) return
         val tts = engine ?: return
         tts.setSpeechRate(preferred.narrationRate.coerceIn(0.6f, 1.4f))
         tts.setPitch(preferred.narrationPitch.coerceIn(0.75f, 1.25f))
@@ -156,9 +185,10 @@ class ReaderNarrator(context: Context) {
 
     fun play() {
         if (segments.isEmpty()) { fail("Нет текста для озвучивания"); return }
+        if (usesBuiltIn() && (!store.state.value.installed || store.state.value.busy)) { fail("Скачайте встроенные голоса в настройках озвучки"); return }
         if (!_status.value.ready) { pendingPlay = true; return }
         val eligible = engine?.voices.orEmpty().filter { it.locale.language == speechLocale.language }
-        if (preferred.narrationVoiceId.isBlank() && eligible.isNotEmpty() && eligible.none { !it.isNetworkConnectionRequired }) {
+        if (!usesBuiltIn() && preferred.narrationVoiceId.isBlank() && eligible.isNotEmpty() && eligible.none { !it.isNetworkConnectionRequired }) {
             fail("Офлайн-голос для этого языка не найден. Выберите сетевой голос вручную")
             return
         }
@@ -174,6 +204,13 @@ class ReaderNarrator(context: Context) {
         val example = if (speechLocale.language == "ru")
             "Ветер стихал. Наступал вечер, и на горизонте зажигались первые огни."
         else "The wind settled. Evening arrived, and the first lights appeared on the horizon."
+        if (usesBuiltIn()) {
+            _status.value = _status.value.copy(preparing = true)
+            builtIn.speak(BuiltInVoiceCatalog.PREVIEW, preferred.narrationVoiceId, preferred.narrationRate, preferred.narrationPitch,
+                onStarted = { _status.value = _status.value.copy(preparing = false) },
+                onError = ::fail)
+            return
+        }
         engine?.speak(example, TextToSpeech.QUEUE_FLUSH, null, "flux-preview-${++generation}")
     }
 
@@ -224,14 +261,31 @@ class ReaderNarrator(context: Context) {
 
     private fun speakCurrent() {
         val segment = segments.getOrNull(currentIndex) ?: run { finishChapter(); return }
+        val builtInPiece = if (usesBuiltIn()) SpeedSpeechText.next(segment.text, rangeOffset, 260) else null
         val speech = NarrationPronunciationPolicy.forSpeech(
-            segment.text.drop(rangeOffset).trimStart(), speechLocale)
+            builtInPiece?.text ?: segment.text.drop(rangeOffset).trimStart(), speechLocale)
         if (speech.isBlank()) { advance(); return }
         val id = "flux-tts-${++generation}"
         activeRequest = id
         requestBaseOffset = rangeOffset
         updatePosition()
         _status.value = _status.value.copy(currentText = speech, playing = true, paused = false)
+        if (usesBuiltIn()) {
+            _status.value = _status.value.copy(preparing = true)
+            val nextPiece = builtInPiece?.let { SpeedSpeechText.next(segment.text, it.end, 260) }
+            val next = listOfNotNull(nextPiece?.text) + segments.asSequence().drop(currentIndex + 1).take(1).map {
+                NarrationPronunciationPolicy.forSpeech(SpeedSpeechText.next(it.text, 0, 260)?.text.orEmpty(), speechLocale)
+            }.filter { it.isNotBlank() && it.length <= 700 }
+            builtIn.speak(speech, preferred.narrationVoiceId, preferred.narrationRate, preferred.narrationPitch, next,
+                onStarted = { if (activeRequest == id) _status.value = _status.value.copy(preparing = false) },
+                onDone = { if (!isClosing && activeRequest == id) {
+                    if (builtInPiece != null && builtInPiece.end < segment.text.length) {
+                        rangeOffset = builtInPiece.end; speakCurrent()
+                    } else advance()
+                } },
+                onError = { if (activeRequest == id) fail(it) })
+            return
+        }
         val voice = engine?.voice
         // Never cache network voices. Only audio generated by an on-device TTS engine is stored.
         if (voice != null && !voice.isNetworkConnectionRequired && rangeOffset == 0) {
@@ -329,6 +383,8 @@ class ReaderNarrator(context: Context) {
         cachedPlayer?.let { runCatching { it.stop(); it.release() } }
         cachedPlayer = null
         engine?.stop()
+        builtIn.stop()
+        _status.value = _status.value.copy(preparing = false)
     }
 
     private fun fail(message: String) {
@@ -343,5 +399,7 @@ class ReaderNarrator(context: Context) {
         engine?.shutdown()
         engine = null
         clipCache.close()
+        builtIn.close()
+        scope.cancel()
     }
 }

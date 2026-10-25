@@ -64,6 +64,27 @@ class VisualReviewActivity : ComponentActivity() {
             speedChapterIntroMs = 0,
         ) }
         setContent { FluxReaderApp(viewModel) }
+        if (scene == "voices") {
+            intent.getStringExtra("voice")?.let { voice -> viewModel.updateSettings { it.copy(narrationVoiceId = voice) } }
+            setContent {
+                val settings by viewModel.settings.collectAsState()
+                val narrator = remember { io.fluxreader.app.reader.ReaderNarrator(applicationContext) }
+                val status by narrator.status.collectAsState()
+                DisposableEffect(narrator) { onDispose { narrator.close() } }
+                LaunchedEffect(settings) { narrator.setPreferences(settings) }
+                LaunchedEffect(Unit) {
+                    narrator.setDocument("visual-speech", 0, io.fluxreader.app.data.ChapterContent(0, "Проверка озвучки", listOf(
+                        io.fluxreader.app.data.ReaderBlock.Text("Ветер стихал. Наступал вечер, и на горизонте зажигались первые огни."),
+                        io.fluxreader.app.data.ReaderBlock.Text("— Добрый вечер! — сказала Анна. — Мы встретимся завтра, в девять часов."))), 0, 0)
+                }
+                LaunchedEffect(status.ready) { if (status.ready && intent.getBooleanExtra("autoSpeech", false)) narrator.play() }
+                FluxTheme(settings) {
+                    NarrationSheet(status, settings, { finish() }, narrator::play, narrator::pause, narrator::stop,
+                        narrator::skipPrevious, narrator::skipNext, narrator::preview, viewModel::updateSettings)
+                }
+            }
+            return
+        }
         if (scene == "updates") {
             val phase = runCatching { UpdatePhase.valueOf(intent.getStringExtra("phase") ?: "AVAILABLE") }.getOrDefault(UpdatePhase.AVAILABLE)
             setContent {

@@ -38,7 +38,7 @@ bash scripts/test_dialogues.command
 echo "▶ Version / clean-line integrity"
 bash scripts/verify-version.command
 python3 scripts/test_version_preflight.py
-# Internet access is now strictly for the opt-in GitHub Releases updater.
+# Internet access is used for opt-in GitHub updates and explicitly requested voice downloads.
 # Narration and book reading remain offline-first.
 if grep -Rqs 'android.permission.INTERNET' app/src/main/AndroidManifest.xml &&
    [[ ! -s app/src/main/java/io/fluxreader/app/update/GitHubUpdateManager.kt ]]; then

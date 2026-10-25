@@ -177,8 +177,11 @@ fun SpeedReaderScreen(
     val speech = remember(context, state.bookId) { SpeedSpeechNarrator(context.applicationContext) }
     val speechStatus by speech.status.collectAsState()
     var voiceMode by rememberSaveable(state.bookId) { mutableStateOf(false) }
+    val phraseVoice = voiceMode && io.fluxreader.app.reader.BuiltInVoiceCatalog.isBuiltIn(settings.narrationVoiceId)
     val visualChunk = if (voiceMode && state.chapterText.isNotBlank()) {
-        SpeedReaderCursor.next(state.chapterText, speechStatus.offset, 1)
+        if (phraseVoice) io.fluxreader.app.reader.SpeedSpeechText.next(state.chapterText, speechStatus.offset, 260)
+            ?.let(io.fluxreader.app.reader.SpeedSpeechText::displayChunk)
+        else SpeedReaderCursor.next(state.chapterText, speechStatus.offset, 1)
     } else null
     val displayState = if (voiceMode && visualChunk != null) {
         state.copy(chunk = visualChunk, playing = speechStatus.playing)
@@ -186,6 +189,8 @@ fun SpeedReaderScreen(
     val showShortDialogue = !voiceMode && settings.speedDialogueEnabled && settings.speedDialogueShortReplies &&
         settings.speedMode == SpeedMode.RSVP && (displayState.chunk?.tokens?.size ?: 0) > 1
     val displaySettings = when {
+        phraseVoice -> settings.copy(speedMode = SpeedMode.PHRASE, speedMaxLines = 5,
+            speedFixedFontSize = false, speedAutoFitText = true)
         voiceMode -> settings.copy(speedMode = SpeedMode.RSVP)
         showShortDialogue -> settings.copy(
             speedMode = SpeedMode.PHRASE,
@@ -244,6 +249,11 @@ fun SpeedReaderScreen(
             viewModel.speedToggle()
         }
     }
+    LaunchedEffect(voiceMode, speechStatus.error) {
+        if (voiceMode) speechStatus.error?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     val toggleVoice: () -> Unit = {
         if (voiceMode) {
             speech.pause()
@@ -252,6 +262,7 @@ fun SpeedReaderScreen(
             viewModel.speedPause()
             speech.setPosition(state.chunk?.startOffset ?: 0)
             voiceMode = true
+            if (!speechStatus.ready) settingsPanel = SpeedSettingsPanel.VOICE
         }
     }
     val editSpeaker: () -> Unit = {
@@ -566,6 +577,10 @@ fun SpeedReaderScreen(
         SpeedSettingsPanel.VOICE -> SpeedVoiceSettingsSheet(
             settings = settings,
             voices = speechStatus.voices,
+            voiceReady = speechStatus.ready,
+            preparing = speechStatus.preparing,
+            voiceError = speechStatus.error,
+            onPreview = speech::preview,
             viewModel = viewModel,
             onBack = { settingsPanel = SpeedSettingsPanel.HUB },
             onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
@@ -1792,6 +1807,10 @@ private fun SpeedDialogueSheet(
 private fun SpeedVoiceSettingsSheet(
     settings: ReaderSettings,
     voices: List<SpeedSpeechNarrator.AvailableVoice>,
+    voiceReady: Boolean,
+    preparing: Boolean,
+    voiceError: String?,
+    onPreview: () -> Unit,
     viewModel: AppViewModel,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
@@ -1808,10 +1827,7 @@ private fun SpeedVoiceSettingsSheet(
                 .padding(horizontal = 20.dp).padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                "Используются офлайн-голоса Android.",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            voiceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             SettingsValueSlider(
                 title = "Скорость речи",
                 value = settings.narrationRate,
@@ -1829,6 +1845,7 @@ private fun SpeedVoiceSettingsSheet(
                 subtitle = "",
                 checked = settings.narrationAutoNextChapter,
             ) { enabled -> viewModel.updateSettings { it.copy(narrationAutoNextChapter = enabled) } }
+            VoiceSourceSettings(settings, viewModel::updateSettings, onPreview, voiceReady, preparing, androidVoices = {
             Text("Офлайн-голоса", style = MaterialTheme.typography.titleMedium)
             if (voices.isEmpty()) Text("Офлайн-голоса не найдены.", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1854,6 +1871,9 @@ private fun SpeedVoiceSettingsSheet(
                     )
                 }
             }
+            })
+            if (!io.fluxreader.app.reader.BuiltInVoiceCatalog.isBuiltIn(settings.narrationVoiceId)) Button(onClick = onPreview, enabled = voiceReady && !preparing) { Text("Проба голоса") }
+
         }
     }
 }

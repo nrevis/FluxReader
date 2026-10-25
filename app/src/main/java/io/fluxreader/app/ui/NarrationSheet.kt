@@ -55,12 +55,7 @@ internal fun NarrationSheet(
         ModalSheetHeader("Озвучивание книги", onClose = onDismiss, modifier = Modifier.padding(horizontal = 20.dp))
 
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "Голоса Android. Сетевые голоса могут отправлять текст речевому сервису.",
-                style = MaterialTheme.typography.bodySmall,
-            )
             status.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (!status.ready && status.error == null) Text("Запуск речевого движка…")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 IconButton(onClick = onPrevious, enabled = status.ready) { Icon(Icons.Default.SkipPrevious, "Предыдущее предложение") }
                 IconButton(onClick = if (status.playing) onPause else onPlay, enabled = status.ready) {
@@ -69,6 +64,7 @@ internal fun NarrationSheet(
                 IconButton(onClick = onStop, enabled = status.ready) { Icon(Icons.Default.Stop, "Остановить") }
                 IconButton(onClick = onNext, enabled = status.ready) { Icon(Icons.Default.SkipNext, "Следующее предложение") }
             }
+            if (status.preparing) Text("Подготовка озвучки…", style = MaterialTheme.typography.bodySmall)
             if (status.currentText.isNotBlank()) {
                 Text(status.currentText.take(180), maxLines = 3, style = MaterialTheme.typography.bodySmall)
             }
@@ -81,6 +77,8 @@ internal fun NarrationSheet(
                 Text("Автоматически читать следующую главу")
             }
             HorizontalDivider()
+            VoiceSourceSettings(settings, onUpdate, onPreview, status.ready, status.preparing, androidVoices = {
+                Text("Сетевые голоса могут отправлять текст речевому сервису.", style = MaterialTheme.typography.bodySmall)
             Text("Выбор голоса (${status.currentLanguage})", style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = { onUpdate { it.copy(narrationVoiceId = "") } }) { Text(if (settings.narrationVoiceId.isBlank()) "✓ Автоматически — лучший доступный" else "Автоматически — лучший доступный") }
             Column(Modifier.height(220.dp).verticalScroll(rememberScrollState())) {
@@ -93,13 +91,10 @@ internal fun NarrationSheet(
                     }
                 }
             }
-            TextButton(onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://k2-fsa.github.io/sherpa/onnx/tts/apk-engine.html")))
-            }) { Text("Установить офлайн-голос sherpa-onnx") }
+            })
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onPreview, enabled = status.ready) { Text("Проба голоса") }
-                TextButton(onClick = {
+                if (!io.fluxreader.app.reader.BuiltInVoiceCatalog.isBuiltIn(settings.narrationVoiceId)) Button(onClick = onPreview, enabled = status.ready) { Text("Проба голоса") }
+                if (!io.fluxreader.app.reader.BuiltInVoiceCatalog.isBuiltIn(settings.narrationVoiceId)) TextButton(onClick = {
                     runCatching { context.startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
                         .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS)) } }
                 }) { Text("Настройки голосов Android") }
