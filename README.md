@@ -6,9 +6,9 @@
 
 EPUB · FB2 · FB2.ZIP · TXT · PDF · Аудиокниги
 
-[**Скачать APK**](https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.98) · [Исходники ZIP](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.98/FluxReader-0.2.0-alpha.98-clean.zip) · [Все скриншоты](#gallery)
+[**Скачать APK**](https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.99) · [Исходники ZIP](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.99/FluxReader-0.2.0-alpha.99-clean.zip) · [Все скриншоты](#gallery)
 
-**Android 9+** · **0.2.0-alpha.98** · **Автор: n.revis**
+**Android 9+** · **0.2.0-alpha.99** · **Автор: n.revis**
 
 </div>
 
@@ -221,11 +221,11 @@ Flux Reader объединяет домашнюю библиотеку, обыч
 
 Для имени можно выбрать текст, плашку или бабл, размер 12–40 sp, цвет, жирность, положение над или под репликой и отступ. Предпросмотр находится рядом с настройками.
 
-Учитываются слова автора внутри реплики, неразрывные пробелы и явное представление говорящего перед репликой. Пауза в начале реплики настраивается от 0 до 500 мс. Функция выключена по умолчанию: включите её в **Настройки → Скорочтение → Экспериментальные функции** или в меню **«Эксперимент: диалоги»** внутри Speed Reader. Распознавание работает локально; неоднозначные реплики могут остаться без имени.
+Учитываются слова автора внутри реплики, неразрывные пробелы и явное представление говорящего перед репликой. Пауза в начале реплики настраивается от 0 до 500 мс. Функция выключена по умолчанию: включите её в **Настройки → Скорочтение → Экспериментальные функции** или в меню **«Эксперимент: диалоги»** внутри Speed Reader. Распознавание работает локально. Реплика без явного имени получает маркер «Прямая речь»; показ имени и общего маркера переключается отдельно. Неявное имя говорящего не угадывается. Учитываются наречия и должность перед именем, а также эмоциональные авторские ремарки.
 
-<p align="center"><a href="docs/screenshots/speed-reading/dialogue-name-preview.png"><img src="docs/screenshots/speed-reading/dialogue-name-preview.png" width="320" alt="Настройка бабла с именем говорящего и живой предпросмотр"></a><br><sub>Оформление имени: бабл, размер, жирность, положение и цвет. Снимок из эмулятора, текст демонстрационный.</sub></p>
+<p align="center"><a href="docs/screenshots/speed-reading/dialogue-name-preview.png"><img src="docs/screenshots/speed-reading/dialogue-name-preview.png" width="320" alt="Маркер прямой речи, показ имени и настройка бабла с предпросмотром"></a><br><sub>Отдельные переключатели маркера и имени; оформление бабла с предпросмотром. Снимок из эмулятора, текст демонстрационный.</sub></p>
 
-Полноэкранное чтение учитывает скругления углов и вырез камеры. В настройках исправлены контраст текста, обрезанные вкладки и перенос кнопок. Подпись говорящего сохраняет место, чтобы точка фиксации не сдвигалась при появлении имени.
+Полноэкранное чтение учитывает скругления углов и вырез камеры. Варианты настроек переносятся целиком, подписи ползунков отделены от значений, а окно настроек скорочтения открывается полностью и прокручивается. Длинное слово или реплика подгоняются по фактической ширине, чтобы буквы не обрезались. Подпись говорящего сохраняет место, чтобы точка фиксации не сдвигалась при появлении имени.
 
 **Управление:** один тап — воспроизведение/пауза, двойной — полный экран, если эти жесты включены. Можно использовать кнопки на экране или кнопки громкости: короткое нажатие переключает воспроизведение, удержание переводит к соседнему предложению.
 
@@ -254,7 +254,7 @@ Flux Reader объединяет домашнюю библиотеку, обыч
 
 <table>
 <tr>
-<td align="center" valign="top"><a href="docs/screenshots/speed-reading/settings-hub.jpg"><img src="docs/screenshots/speed-reading/settings-hub.jpg" width="280" alt="Разделы настройки скорочтения"></a><br><sub>Разделы настройки скорочтения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/speed-and-pacing.jpg"><img src="docs/screenshots/speed-reading/speed-and-pacing.jpg" width="280" alt="Режимы, профили темпа, WPM и слов за фиксацию"></a><br><sub>Режимы, профили темпа, WPM и слов за фиксацию</sub></td>
+<td align="center" valign="top"><a href="docs/screenshots/speed-reading/settings-hub.png"><img src="docs/screenshots/speed-reading/settings-hub.png" width="280" alt="Разделы настройки скорочтения"></a><br><sub>Разделы настройки скорочтения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/speed-and-pacing.jpg"><img src="docs/screenshots/speed-reading/speed-and-pacing.jpg" width="280" alt="Режимы, профили темпа, WPM и слов за фиксацию"></a><br><sub>Режимы, профили темпа, WPM и слов за фиксацию</sub></td>
 </tr>
 </table>
 <table>
@@ -343,7 +343,7 @@ PDF открывается как документ со страницами, м
 - **ML Kit Latin:** резервное распознавание латинского текста без дополнительных моделей Tesseract.
 - OCR запускается для страниц без встроенного текста и управляется отдельным переключателем.
 
-**В опубликованной alpha.98 языковые модели Tesseract не вложены.** Поэтому наличие переключателей rus/ukr/eng не означает, что все три языка готовы к распознаванию. Для полноценного OCR этих языков нужна сборка с моделями. На скриншоте показаны настройки OCR; отдельного кадра открытого PDF нет.
+**В опубликованной alpha.99 языковые модели Tesseract не вложены.** Поэтому наличие переключателей rus/ukr/eng не означает, что все три языка готовы к распознаванию. Для полноценного OCR этих языков нужна сборка с моделями. На скриншоте показаны настройки OCR; отдельного кадра открытого PDF нет.
 
 <table>
 <tr>
@@ -356,11 +356,11 @@ PDF открывается как документ со страницами, м
 
 ## 10 · Установка и обновления
 
-1. Откройте [релиз 0.2.0-alpha.98](https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.98).
-2. Скачайте **FluxReader-0.2.0-alpha.98-release.apk** и откройте его на Android 9 или новее.
+1. Откройте [релиз 0.2.0-alpha.99](https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.99).
+2. Скачайте **FluxReader-0.2.0-alpha.99-release.apk** и откройте его на Android 9 или новее.
 3. Разрешите установку для приложения, из которого открываете APK, и подтвердите действие в системном установщике.
 
-APK alpha.98 сохраняет сертификат предыдущих alpha-сборок и подходит для обновления поверх alpha.92–alpha.96 с той же подписью.
+APK alpha.99 сохраняет сертификат предыдущих alpha-сборок и подходит для обновления поверх alpha.92–alpha.98 с той же подписью.
 
 В **«Настройки → О программе → Обновления»** добавлены ручная проверка GitHub Releases, необязательная проверка раз в сутки, выбор alpha-канала, скачивание APK с прогрессом и переход к системной установке. Перед установкой проверяются контрольная сумма SHA-256, имя пакета, номер версии и сертификат.
 
@@ -453,7 +453,7 @@ APK alpha.98 сохраняет сертификат предыдущих alpha-
 </table>
 <table>
 <tr>
-<td align="center" valign="top"><a href="docs/screenshots/speed-reading/immersive-playback.jpg"><img src="docs/screenshots/speed-reading/immersive-playback.jpg" width="230" alt="Полноэкранное скорочтение во время воспроизведения"></a><br><sub>Полноэкранное скорочтение во время воспроизведения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/settings-hub.jpg"><img src="docs/screenshots/speed-reading/settings-hub.jpg" width="230" alt="Разделы настройки скорочтения"></a><br><sub>Разделы настройки скорочтения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/display-preferences.jpg"><img src="docs/screenshots/speed-reading/display-preferences.jpg" width="230" alt="Шрифт, ORP, следующие слова и прогресс"></a><br><sub>Шрифт, ORP, следующие слова и прогресс</sub></td>
+<td align="center" valign="top"><a href="docs/screenshots/speed-reading/immersive-playback.jpg"><img src="docs/screenshots/speed-reading/immersive-playback.jpg" width="230" alt="Полноэкранное скорочтение во время воспроизведения"></a><br><sub>Полноэкранное скорочтение во время воспроизведения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/settings-hub.png"><img src="docs/screenshots/speed-reading/settings-hub.png" width="230" alt="Разделы настройки скорочтения"></a><br><sub>Разделы настройки скорочтения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/display-preferences.jpg"><img src="docs/screenshots/speed-reading/display-preferences.jpg" width="230" alt="Шрифт, ORP, следующие слова и прогресс"></a><br><sub>Шрифт, ORP, следующие слова и прогресс</sub></td>
 </tr>
 </table>
 <table>
@@ -473,7 +473,7 @@ APK alpha.98 сохраняет сертификат предыдущих alpha-
 </table>
 <table>
 <tr>
-<td align="center" valign="top"><a href="docs/screenshots/speed-reading/wasteland-playback.jpg"><img src="docs/screenshots/speed-reading/wasteland-playback.jpg" width="230" alt="Wasteland: RSVP во время воспроизведения"></a><br><sub>Wasteland: RSVP во время воспроизведения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/wasteland-settings-hub.jpg"><img src="docs/screenshots/speed-reading/wasteland-settings-hub.jpg" width="230" alt="Wasteland: настройки Speed Reader"></a><br><sub>Wasteland: настройки Speed Reader</sub></td>
+<td align="center" valign="top"><a href="docs/screenshots/speed-reading/wasteland-playback.jpg"><img src="docs/screenshots/speed-reading/wasteland-playback.jpg" width="230" alt="Wasteland: RSVP во время воспроизведения"></a><br><sub>Wasteland: RSVP во время воспроизведения</sub></td><td align="center" valign="top"><a href="docs/screenshots/speed-reading/settings-hub.png"><img src="docs/screenshots/speed-reading/settings-hub.png" width="230" alt="Wasteland: настройки Speed Reader"></a><br><sub>Wasteland: настройки Speed Reader</sub></td>
 </tr>
 </table>
 
@@ -521,6 +521,6 @@ APK alpha.98 сохраняет сертификат предыдущих alpha-
 
 [Релизы](https://github.com/nrevis/FluxReader/releases) · [Исходники](https://github.com/nrevis/FluxReader)
 
-<sub>Описание сверено с исходниками 0.2.0-alpha.98. Скриншоты предоставлены автором и дополнены снимком настроек диалогов из эмулятора; выбранные на них значения и содержимое библиотеки служат примерами.</sub>
+<sub>Описание сверено с исходниками 0.2.0-alpha.99. Скриншоты предоставлены автором и дополнены снимком настроек диалогов из эмулятора; выбранные на них значения и содержимое библиотеки служат примерами.</sub>
 
 </div>

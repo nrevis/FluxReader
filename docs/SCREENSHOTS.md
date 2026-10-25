@@ -53,7 +53,7 @@
 | photo_37 | Точка фиксации и контекст на паузе | [Открыть](screenshots/speed-reading/word-and-context.jpg) |
 | photo_36 | Полный экран с контекстом и компактным управлением | [Открыть](screenshots/speed-reading/immersive-context.jpg) |
 | photo_35 | Полноэкранное скорочтение во время воспроизведения | [Открыть](screenshots/speed-reading/immersive-playback.jpg) |
-| photo_34 | Разделы настройки скорочтения | [Открыть](screenshots/speed-reading/settings-hub.jpg) |
+| Эмулятор alpha.99 | Разделы настройки скорочтения | [Открыть](screenshots/speed-reading/settings-hub.png) |
 | photo_33 | Шрифт, ORP, следующие слова и прогресс | [Открыть](screenshots/speed-reading/display-preferences.jpg) |
 | photo_32 | Касания, кнопки громкости и поведение после паузы | [Открыть](screenshots/speed-reading/behavior-preferences.jpg) |
 | photo_30 | Механика RSVP и точные паузы | [Открыть](screenshots/speed-reading/rsvp-and-timing.jpg) |
