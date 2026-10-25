@@ -66,7 +66,9 @@ fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-gh api "repos/nrevis/FluxReader/releases/tags/$TAG" > "$TMP/release.json"
+# GitHub's tag endpoint does not return drafts; resolve the release ID first.
+RELEASE_ID="$(gh release view "$TAG" --repo nrevis/FluxReader --json databaseId --jq '.databaseId')"
+gh api "repos/nrevis/FluxReader/releases/$RELEASE_ID" > "$TMP/release.json"
 python3 - "$TMP/release.json" "$APK" "$CHECKSUM" "$SOURCE" "$SOURCE_SUM" <<'PYVERIFY'
 import hashlib,json,sys
 from pathlib import Path
@@ -76,6 +78,7 @@ paths=[Path(p) for p in sys.argv[2:]]
 assert set(assets)=={p.name for p in paths}, 'Неверный набор файлов релиза'
 for path in paths:
     asset=assets[path.name]
+    assert asset['state']=='uploaded', 'Загрузка не завершена: '+path.name
     assert asset['size']==path.stat().st_size, path.name
     h=hashlib.sha256()
     with path.open('rb') as stream:
