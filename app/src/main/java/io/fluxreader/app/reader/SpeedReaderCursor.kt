@@ -146,9 +146,8 @@ object SpeedReaderCursor {
 
     fun focusCharacterIndex(token: String): Int {
         if (token.isEmpty()) return 0
-        val opening = setOf('“', '”', '«', '»', '(', '[', '{', '\'', '"')
         val trailing = setOf('“', '”', '«', '»', ')', ']', '}', '\'', '"', ',', ';', ':', '.', '!', '?', '…')
-        val lexicalStart = token.indexOfFirst { it !in opening }.let { if (it < 0) 0 else it }
+        val lexicalStart = token.indexOfFirst { it.isLetterOrDigit() }.let { if (it < 0) 0 else it }
         val lexicalEndExclusive = token.indexOfLast { it !in trailing }.let { if (it < lexicalStart) token.length else it + 1 }
         val cleanLength = (lexicalEndExclusive - lexicalStart).coerceAtLeast(1)
         val withinWord = when {

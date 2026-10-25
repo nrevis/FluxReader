@@ -177,11 +177,8 @@ fun SpeedReaderScreen(
         voiceMode -> settings.copy(speedMode = SpeedMode.RSVP)
         showShortDialogue -> settings.copy(
             speedMode = SpeedMode.PHRASE,
-            speedFontSizeSp = (settings.speedFontSizeSp * 0.66f).coerceIn(24f, 44f),
             speedFixedFontSize = false,
             speedAutoFitText = true,
-            speedMinFontSizeSp = 20f,
-            speedMaxLines = 2,
         )
         else -> settings
     }
@@ -626,6 +623,11 @@ private fun SpeedViewport(
             }
     ) {
         val density = LocalDensity.current
+        val dialogue = remember(state.chapterText, state.chunk?.startOffset, settings.speedDialogueEnabled) {
+            if (settings.speedDialogueEnabled) state.chunk?.let {
+                SpeedDialogueAnalyzer.at(state.chapterText, it.startOffset)
+            } else null
+        }
         val mainTextHeightPx = with(density) {
             (settings.speedFontSizeSp * settings.speedLineHeightMultiplier * settings.speedMaxLines.coerceAtLeast(1)).sp.toPx()
         }
@@ -676,6 +678,7 @@ private fun SpeedViewport(
                 horizontalFocusPosition = settings.speedHorizontalFocusFraction,
                 mainHalfHeightPx = mainHalfHeightPx,
                 lowerContentReservePx = lowerContentReservePx,
+                hasSpeakerLabel = dialogue?.speaker != null && settings.speedDialogueNames,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -728,33 +731,25 @@ private fun SpeedViewport(
             }
             state.chunk != null -> {
                 val chunk = state.chunk
-                val dialogue = remember(state.chapterText, chunk.startOffset, settings.speedDialogueEnabled) {
-                    if (settings.speedDialogueEnabled) SpeedDialogueAnalyzer.at(state.chapterText, chunk.startOffset) else null
-                }
-                if (dialogue != null) {
+                if (dialogue?.speaker != null && settings.speedDialogueNames) {
                     val speakerPalette = listOf(
                         Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A),
                         Color(0xFFA8D9A0), Color(0xFFEBADD4),
                     )
-                    val speakerColor = dialogue.speaker?.let { name ->
-                        speakerPalette[(name.lowercase().hashCode() and Int.MAX_VALUE) % speakerPalette.size]
-                    } ?: focusColor
-                    // Absolute overlay: does not resize or shift the fixed ORP fixation rail.
-                    Surface(
-                        modifier = Modifier.align(Alignment.Center).offset(y = yOffset - mainHalfHeightDp - 38.dp),
-                        color = speakerColor.copy(alpha = 0.14f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, speakerColor.copy(alpha = 0.32f)),
-                    ) {
-                        Text(
-                            text = if (settings.speedDialogueNames) dialogue.speaker ?: "Прямая речь" else "Диалог",
-                            color = speakerColor,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        )
-                    }
+                    val speakerColor = speakerPalette[
+                        (dialogue.speaker.lowercase().hashCode() and Int.MAX_VALUE) % speakerPalette.size
+                    ]
+                    // A quiet name label has its own space above the guide and the fixation.
+                    Text(
+                        text = dialogue.speaker,
+                        color = speakerColor,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.Center)
+                            .offset(y = yOffset - mainHalfHeightDp - 38.dp)
+                            .padding(horizontal = 12.dp),
+                    )
                 }
                 SpeedChunkText(
                     state = state,
@@ -1003,6 +998,7 @@ private fun SpeedFocusGuide(
     horizontalFocusPosition: Float,
     mainHalfHeightPx: Float,
     lowerContentReservePx: Float,
+    hasSpeakerLabel: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier) {
@@ -1018,7 +1014,7 @@ private fun SpeedFocusGuide(
         // not let guide lines collide with readable text.
         val gapTop = (centerY - mainHalfHeightPx - clearance).coerceAtLeast(top)
         val gapBottom = (centerY + mainHalfHeightPx + clearance + lowerContentReservePx).coerceAtMost(bottom)
-        if (gapTop > top) {
+        if (gapTop > top && !hasSpeakerLabel) {
             drawLine(guideColor, Offset(centerX, top), Offset(centerX, gapTop), strokeWidth = stroke)
         }
         if (bottom > gapBottom) {

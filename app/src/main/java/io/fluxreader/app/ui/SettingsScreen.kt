@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +39,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,6 +114,7 @@ fun SettingsScreen(
             }
         },
         containerColor = if (settings.useWastelandDesign || settings.useCyberpunkDesign) LocalExperimentalColors.current.background else MaterialTheme.colorScheme.background,
+        contentColor = if (settings.useWastelandDesign || settings.useCyberpunkDesign) LocalExperimentalColors.current.text else MaterialTheme.colorScheme.onBackground,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             SettingsSectionTabs(
@@ -167,12 +173,18 @@ private fun SettingsSectionTabs(
                 contentPadding = 5.dp,
             ) {
                 Row(
-                    Modifier.fillMaxWidth().horizontalScroll(scrollState)
-                        .padding(start = leadingRail, end = trailingRail),
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = 36.dp)
+                        .horizontalScroll(scrollState),
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     SettingsSection.entries.forEach { item ->
+                        val bringIntoView = remember { BringIntoViewRequester() }
+                        LaunchedEffect(selected) {
+                            if (item == selected) bringIntoView.bringIntoView()
+                        }
                         ExperimentalTab(
+                            modifier = Modifier.bringIntoViewRequester(bringIntoView),
                             label = item.title,
                             selected = item == selected,
                             onClick = { onSelect(item) },
@@ -323,9 +335,10 @@ private fun LibrarySettings(settings: ReaderSettings, viewModel: AppViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LibraryViewSelector(settings: ReaderSettings, viewModel: AppViewModel) {
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         LibraryViewMode.entries.forEach { mode ->
             FilterChip(
                 selected = settings.libraryViewMode == mode,
@@ -340,27 +353,28 @@ private fun LibraryViewSelector(settings: ReaderSettings, viewModel: AppViewMode
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpeedSettings(settings: ReaderSettings, viewModel: AppViewModel) {
     SectionTitle(Icons.Default.Speed, "Скорочтение")
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         SpeedMode.entries.forEach { mode ->
             FilterChip(
                 selected = settings.speedMode == mode,
                 onClick = { viewModel.updateSettings { it.copy(speedMode = mode) } },
                 leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) },
-                label = { Text(speedModeLabel(mode)) },
+                label = { Text(speedModeLabel(mode), maxLines = 1, softWrap = false) },
             )
         }
     }
     Text("Темп показа", style = MaterialTheme.typography.labelLarge)
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         SpeedPacingMode.entries.forEach { mode ->
             FilterChip(
                 selected = settings.speedPacingMode == mode,
                 onClick = { viewModel.updateSettings { it.copy(speedPacingMode = mode) } },
                 leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                label = { Text(pacingLabel(mode)) },
+                label = { Text(pacingLabel(mode), maxLines = 1, softWrap = false) },
             )
         }
     }
@@ -438,7 +452,7 @@ private fun OcrSettings(settings: ReaderSettings, viewModel: AppViewModel) {
     SettingsToggleRow("ML Kit fallback", "Latin OCR без дополнительных traineddata.", settings.ocrUseMlKitFallback) { enabled ->
         viewModel.updateSettings { it.copy(ocrUseMlKitFallback = enabled) }
     }
-    Text("Для полного rus/ukr/eng APK: scripts/build-debug.command --with-ocr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Русский, украинский и английский OCR доступны в сборке с языковыми моделями. Без них используется распознавание латиницы.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

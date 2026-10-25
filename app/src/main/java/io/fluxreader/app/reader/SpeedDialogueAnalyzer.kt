@@ -83,15 +83,18 @@ object SpeedDialogueAnalyzer {
     /** Only merge a COMPLETE, very short reply. Never consume an author's attribution. */
     fun shortReplyWordCount(text: String, offset: Int, limit: Int = 6): Int? {
         val span = at(text, offset) ?: return null
-        if (offset != span.start) return null
-        val reply = text.substring(span.start, span.endExclusive).trim()
+        if (offset != span.start && offset != SpeedDialoguePlayback.readableOffset(text, span.start)) return null
+        val reply = text.substring(SpeedDialoguePlayback.readableOffset(text, span.start), span.endExclusive).trim()
         val tokens = wordPattern.findAll(reply).map { it.value }.take(limit + 1).toList()
-        if (tokens.size !in 2..limit) return null
+        if (tokens.size !in 1..limit) return null
         val last = tokens.last()
         // Avoid absorbing open-ended dialogue into the narrator when punctuation is missing.
         if ((last.lastOrNull() ?: return null) !in charArrayOf('.', '!', '?', '…', '»', '”')) return null
         return tokens.size
     }
 
-    fun isReplyStart(text: String, offset: Int): Boolean = at(text, offset)?.start == offset
+    fun isReplyStart(text: String, offset: Int): Boolean {
+        val span = at(text, offset) ?: return false
+        return offset == span.start || offset == SpeedDialoguePlayback.readableOffset(text, span.start)
+    }
 }

@@ -30,8 +30,8 @@ class SpeedDialogueAnalyzerTest {
     }
 
     @Test fun shortReplyNeverConsumesNarration() {
-        assertEquals(2, SpeedDialogueAnalyzer.shortReplyWordCount("— Нет. — ответил Павел.", 0))
-        assertEquals(4, SpeedDialogueAnalyzer.shortReplyWordCount("— Ну как дела? — спросил Павел.", 0))
+        assertEquals(1, SpeedDialogueAnalyzer.shortReplyWordCount("— Нет. — ответил Павел.", 0))
+        assertEquals(3, SpeedDialogueAnalyzer.shortReplyWordCount("— Ну как дела? — спросил Павел.", 0))
         assertNull(SpeedDialogueAnalyzer.shortReplyWordCount("— Просто длинная незавершённая реплика", 0))
         assertNull(SpeedDialogueAnalyzer.shortReplyWordCount("— Сегодня мы совершенно не планируем идти за грибами!", 0))
     }

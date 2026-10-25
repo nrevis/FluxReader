@@ -37,7 +37,7 @@ import io.fluxreader.app.reader.ReaderProgressMath
 import io.fluxreader.app.reader.SpeedChunk
 import io.fluxreader.app.reader.SpeedHeadingCue
 import io.fluxreader.app.reader.SpeedMediaCue
-import io.fluxreader.app.reader.SpeedDialogueAnalyzer
+import io.fluxreader.app.reader.SpeedDialoguePlayback
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SearchEngine
 import kotlinx.coroutines.CancellationException
@@ -1522,16 +1522,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
-        val shortReplyWords = dialogueReplyWords(state.chapterText, chunk.endOffset, config)
-        val words = shortReplyWords ?: wordsForMode(config.speedMode, config.speedWordsPerFixation)
-        val next = SpeedReaderCursor.next(
-            state.chapterText,
-            chunk.endOffset,
-            words,
-            config.speedSmartChunking || shortReplyWords != null,
-            adaptiveWordCount = config.speedAdaptiveChunkSize && config.speedMode != SpeedMode.RSVP,
-            pacingMode = config.speedPacingMode,
-        )
+        val next = speedChunkAt(state.chapterText, chunk.endOffset, config)
 
         if (next != null) {
             val media = nextSpeedMediaCue(state, chunk.endOffset, next.startOffset)
@@ -1774,15 +1765,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val semanticStart = document.readableOffset(requestedStart)
             val start = SpeedReaderCursor.wordStartOffset(text, semanticStart)
             val config = settings.value
-            val shortReplyWords = dialogueReplyWords(text, start, config)
-            val chunk = SpeedReaderCursor.next(
-                text,
-                start,
-                shortReplyWords ?: words,
-                config.speedSmartChunking || shortReplyWords != null,
-                adaptiveWordCount = config.speedAdaptiveChunkSize && config.speedMode != SpeedMode.RSVP,
-                pacingMode = config.speedPacingMode,
-            )
+            val chunk = SpeedDialoguePlayback.next(text, start, config, words)
             if (chunk != null) return LoadedSpeedChapter(index, text, chunk, document.mediaCues, document.headingCues)
             index++
         }
@@ -1981,24 +1964,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         offset: Int,
         config: ReaderSettings = settings.value,
     ): SpeedChunk? {
-        val shortReplyWords = dialogueReplyWords(text, offset, config)
-        val words = shortReplyWords ?: wordsForMode(config.speedMode, config.speedWordsPerFixation)
-        return SpeedReaderCursor.next(
-            text = text,
-            offset = offset,
-            wordCount = words,
-            smartChunking = config.speedSmartChunking || shortReplyWords != null,
-            adaptiveWordCount = config.speedAdaptiveChunkSize && config.speedMode != SpeedMode.RSVP,
-            pacingMode = config.speedPacingMode,
+        return SpeedDialoguePlayback.next(
+            text, offset, config, wordsForMode(config.speedMode, config.speedWordsPerFixation),
         )
-    }
-
-    private fun dialogueReplyWords(text: String, offset: Int, config: ReaderSettings): Int? {
-        if (!config.speedDialogueEnabled || !config.speedDialogueShortReplies || config.speedMode != SpeedMode.RSVP) return null
-        // next() begins at the next non-whitespace character, not necessarily at offset.
-        var start = offset.coerceIn(0, text.length)
-        while (start < text.length && text[start].isWhitespace()) start++
-        return SpeedDialogueAnalyzer.shortReplyWordCount(text, start)
     }
 
     private fun wordsForMode(mode: SpeedMode, configured: Int): Int = when (mode) {
