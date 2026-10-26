@@ -24,7 +24,7 @@ checks = {
     "Критик компоновки": [
         ("fullscreen controls measured outside viewport", 'modifier = Modifier.weight(1f).fillMaxWidth()' in speed),
         ("fullscreen context compact", 'compact = immersiveMode' in speed),
-        ("context excerpt max 3 lines in full screen", 'maxLines = if (compact) 3 else 4' in speed),
+        ("context is measured around the whole active range", all(s in speed for s in ["val lineBudget = if (compact) 3 else 4", "SpeedPausePreviewWindow.fit(chapterText, chunk.startOffset, chunk.endOffset)", "measured.lineCount <= lineBudget"])),
         ("speed controls collapsed by default", 'var speedTuningExpanded by rememberSaveable { mutableStateOf(false) }' in speed),
         ("compact header grows for chapter text / font scaling", 'Modifier.fillMaxWidth().heightIn(min = 56.dp)' in speed and 'Text(section.ifBlank' in speed),
         ("next-word preview fits before rendering", 'nextLeftPx + previewWidthPx + gapPx < maxWidthPx' in speed),

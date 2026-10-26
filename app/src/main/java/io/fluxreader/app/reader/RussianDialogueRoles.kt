@@ -227,6 +227,7 @@ internal class DialogueScene(private val roster: DialogueCharacterRoster, privat
         }
         seen[name] = Seen(name, paragraph, offset)
     }
+    fun isDeparted(name: String): Boolean = name in departed
     fun resolve(pronoun: String, excluded: Set<String>): String? {
         val gender = if (pronoun == "она") DialogueGender.FEMININE else DialogueGender.MASCULINE
         return seen.keys.filter { it !in excluded && it !in departed && roster.gender(it) == gender }.singleOrNull()

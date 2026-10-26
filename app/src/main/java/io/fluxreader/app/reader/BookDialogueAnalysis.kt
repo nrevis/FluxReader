@@ -2,7 +2,7 @@ package io.fluxreader.app.reader
 
 import java.security.MessageDigest
 
-enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT, SCENE_PRONOUN, GRAMMATICAL_SUBJECT, NARRATIVE_CONTINUATION }
+enum class DialogueEvidence { EXPLICIT, SCENE_INTRODUCTION, PRONOUN_ANTECEDENT, SCENE_PRONOUN, GRAMMATICAL_SUBJECT, NARRATIVE_CONTINUATION, AFFECTED_TOPIC, SELF_INTRODUCTION }
 
 enum class DialogueGender { MASCULINE, FEMININE }
 
@@ -143,6 +143,11 @@ object BookDialogueAnalyzer {
                             nameForms.mentions(prefix).map { it.name }.distinct().size > 1) pronounSpeaker = null
                         pronounEvidence = DialogueEvidence.PRONOUN_ANTECEDENT
                         if (pronounSpeaker == null) {
+                            pronounSpeaker = DialogueAdditionalEvidence.affectedTopic(prefix, pronoun, roster, nameForms, roles.addressees)
+                                ?.takeUnless { it in scene.departedNames(prefix) || scene.isDeparted(it) }
+                            if (pronounSpeaker != null) pronounEvidence = DialogueEvidence.AFFECTED_TOPIC
+                        }
+                        if (pronounSpeaker == null) {
                             pronounSpeaker = scene.resolve(pronoun, roles.addressees)
                             pronounEvidence = DialogueEvidence.SCENE_PRONOUN
                         }
@@ -160,7 +165,8 @@ object BookDialogueAnalyzer {
             resolved.span.speaker?.let { scene.record(it, span.start) }
             resolved
         }
-        return ChapterDialogueIndex(local.textFingerprint, resumeInterruptedNarration(text, result, nameForms, checkpoint))
+        val selfNamed = DialogueAdditionalEvidence.selfIntroductions(text, result, checkpoint)
+        return ChapterDialogueIndex(local.textFingerprint, resumeInterruptedNarration(text, selfNamed, nameForms, checkpoint))
     }
 
     /** An ellipsis can resume a monologue only with matching explicit anchors on both sides

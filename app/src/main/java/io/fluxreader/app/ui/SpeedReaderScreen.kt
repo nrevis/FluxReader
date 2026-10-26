@@ -547,10 +547,11 @@ fun SpeedReaderScreen(
                         onNext = nextSentence,
                         onNarration = toggleVoice)
                     if (!voiceMode) {
-                        Row(Modifier.fillMaxWidth().height(34.dp),
+                        Row(Modifier.fillMaxWidth().heightIn(min = 34.dp),
                             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                             Text("${settings.speedWpm} WPM  ·  ${if (speedTuningExpanded) "Скрыть настройки" else "Настроить скорость"}",
-                                modifier = Modifier.clickable { speedTuningExpanded = !speedTuningExpanded }.padding(horizontal = 12.dp),
+                                modifier = Modifier.clickable { speedTuningExpanded = !speedTuningExpanded }.padding(horizontal = 12.dp, vertical = 6.dp),
+                                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.labelMedium, color = focusColor)
                         }
                         if (speedTuningExpanded) SpeedControls(settings, viewModel, textColor)
@@ -1078,26 +1079,14 @@ private fun SpeedPausePreview(
     compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val window = remember(chapterText, chunk.startOffset) {
-        SpeedReaderCursor.textWindow(chapterText, chunk.startOffset, maxChars = 700)
-    }
-    if (window.text.isBlank()) return
-    val localStart = (chunk.startOffset - window.startOffset).coerceIn(0, window.text.length)
-    val localEnd = (chunk.endOffset - window.startOffset).coerceIn(localStart, window.text.length)
-    val annotated = run {
-        val base = buildAnnotatedString {
-            append(window.text)
-            if (localStart < localEnd) {
-                addStyle(
-                    SpanStyle(color = focusColor, fontWeight = FontWeight.SemiBold),
-                    start = localStart,
-                    end = localEnd,
-                )
-            }
-        }
-        colorSpeedSpeech(base, speechColoring?.segments(window.startOffset, window.startOffset + window.text.length)
-            .orEmpty().mapNotNull { run -> run.speaker?.let { SpeechColorRun(run.start, run.endExclusive, speakerColor(it)) } })
-    }
+    if (chapterText.isBlank()) return
+    val measurer = rememberTextMeasurer()
+    val previewStyle = MaterialTheme.typography.bodyMedium.copy(
+        color = textColor.copy(alpha = 0.84f),
+        lineHeight = 22.sp,
+        textAlign = TextAlign.Start,
+    )
+    val density = LocalDensity.current
     Surface(
         modifier = modifier,
         color = textColor.copy(alpha = 0.085f),
@@ -1105,28 +1094,53 @@ private fun SpeedPausePreview(
         border = BorderStroke(1.dp, textColor.copy(alpha = 0.14f)),
         shadowElevation = 0.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)) {
-            val layoutHolder = remember(annotated) { arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1) }
-            BasicText(
-                text = annotated,
-                modifier = Modifier.pointerInput(annotated, window.startOffset, settings.speedDialogueEnabled) {
-                    detectTapGestures { position ->
-                        val layout = layoutHolder[0] ?: return@detectTapGestures
-                        val localOffset = layout.getOffsetForPosition(position).coerceIn(0, window.text.length)
-                        val word = SpeedDialoguePlayback.wordStartOffset(chapterText, window.startOffset + localOffset, settings)
-                        onWordTap(word)
-                    }
-                },
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = textColor.copy(alpha = 0.84f),
-                    lineHeight = 22.sp,
-                    textAlign = TextAlign.Start,
-                ),
-                maxLines = if (compact) 3 else 4,
-                overflow = TextOverflow.Ellipsis,
-                onTextLayout = { layoutHolder[0] = it },
-            )
+        BoxWithConstraints(Modifier.fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp)) {
+            val width = constraints.maxWidth.coerceAtLeast(1)
+            val lineBudget = if (compact) 3 else 4
+            fun focusedText(window: io.fluxreader.app.reader.SpeedTextWindow): AnnotatedString = buildAnnotatedString {
+                append(window.text)
+                val localStart = (chunk.startOffset - window.startOffset).coerceIn(0, window.text.length)
+                val localEnd = (chunk.endOffset - window.startOffset).coerceIn(localStart, window.text.length)
+                if (localStart < localEnd) addStyle(
+                    SpanStyle(color = focusColor, fontWeight = FontWeight.SemiBold), localStart, localEnd)
+            }
+            val window = remember(chapterText, chunk.startOffset, chunk.endOffset, width,
+                previewStyle, density.density, density.fontScale, lineBudget, measurer) {
+                io.fluxreader.app.reader.SpeedPausePreviewWindow.fit(chapterText, chunk.startOffset, chunk.endOffset) { candidate ->
+                    val measured = measurer.measure(
+                        text = focusedText(candidate), style = previewStyle,
+                        constraints = Constraints(maxWidth = width), maxLines = Int.MAX_VALUE,
+                        overflow = TextOverflow.Clip,
+                    )
+                    measured.lineCount <= lineBudget
+                }
+            }
+            if (window.text.isNotBlank()) {
+                val annotated = colorSpeedSpeech(focusedText(window),
+                    speechColoring?.segments(window.startOffset, window.startOffset + window.text.length)
+                        .orEmpty().mapNotNull { run -> run.speaker?.let { SpeechColorRun(run.start, run.endExclusive, speakerColor(it)) } })
+                val layoutHolder = remember(annotated, window.startOffset, previewStyle, width) {
+                    arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1)
+                }
+                BasicText(
+                    text = annotated,
+                    modifier = Modifier.pointerInput(annotated, window.startOffset, settings.speedDialogueEnabled) {
+                        detectTapGestures { position ->
+                            val layout = layoutHolder[0] ?: return@detectTapGestures
+                            val localOffset = layout.getOffsetForPosition(position).coerceIn(0, window.text.lastIndex)
+                            val word = SpeedDialoguePlayback.wordStartOffset(chapterText, window.startOffset + localOffset, settings)
+                            onWordTap(word)
+                        }
+                    },
+                    style = previewStyle,
+                    // The measured window already fits the normal budget. A longer fixation is
+                    // allowed to wrap instead of hiding its active words behind an ellipsis.
+                    maxLines = Int.MAX_VALUE,
+                    overflow = TextOverflow.Clip,
+                    onTextLayout = { layoutHolder[0] = it },
+                )
+            }
         }
     }
 }
