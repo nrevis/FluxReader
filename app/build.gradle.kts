@@ -18,8 +18,8 @@ android {
         applicationId = "io.fluxreader.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 20125
-        versionName = "0.2.0-alpha.108"
+        versionCode = 20126
+        versionName = "0.2.0-alpha.109"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

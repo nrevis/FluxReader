@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 /** Cosmetic only. The real system insets still own all content measurement and touch targets. */
 @Composable
 internal fun DeviceStatusCrown(immersive: Boolean, experimental: Boolean, backgroundOverride: Color? = null) {
+    val decorateCamera = Build.MANUFACTURER.equals("Google", ignoreCase = true) &&
+        (Build.MODEL.equals("Pixel", ignoreCase = true) || Build.MODEL.startsWith("Pixel ", ignoreCase = true))
     val density = LocalDensity.current
     val safeTop = WindowInsets.safeDrawing.getTop(density).toFloat()
     val safeBottom = WindowInsets.safeDrawing.getBottom(density).toFloat()
@@ -48,7 +50,7 @@ internal fun DeviceStatusCrown(immersive: Boolean, experimental: Boolean, backgr
         }
         if (!immersive && safeBottom > 0f) drawRect(background,
             topLeft = Offset(0f, size.height - safeBottom), size = Size(size.width, safeBottom))
-        if (cutoutTop > 0 || cutouts.isNotEmpty()) for (rect in cameraShapes) {
+        if (decorateCamera && (cutoutTop > 0 || cutouts.isNotEmpty())) for (rect in cameraShapes) {
             if (rect.top > 0 && rect.top > safeTop || rect.bottom > size.height / 3f) continue
             val gap = 4.dp.toPx()
             val left = (rect.left - gap).coerceAtLeast(0f)
