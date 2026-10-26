@@ -196,24 +196,24 @@ class SpeedReaderCursorTest {
     @Test fun complexWordSlowdownIsNotClippedForLongPhrasesAtLowSpeed() {
         val text = List(7) { "электромагнитный" }.joinToString(" ")
         val phrase = requireNotNull(SpeedReaderCursor.next(text, 0, 7))
-        fun delay(percent: Int, mode: SpeedPacingMode) = SpeedReaderCursor.delayMillis(
+        fun delay(extraMs: Int, mode: SpeedPacingMode) = SpeedReaderCursor.delayMillis(
             100, phrase, text, mode, paragraphPause = false, microPausesEnabled = false,
-            longWordSlowdownPercent = percent,
+            complexWordPauseMs = extraMs,
         )
         assertEquals(4_200L, delay(0, SpeedPacingMode.SMART))
-        assertTrue(delay(30, SpeedPacingMode.SMART) > delay(0, SpeedPacingMode.SMART))
-        assertTrue(delay(60, SpeedPacingMode.SMART) > delay(30, SpeedPacingMode.SMART))
-        assertTrue(delay(60, SpeedPacingMode.DEEP) > delay(60, SpeedPacingMode.SMART))
-        assertTrue(delay(60, SpeedPacingMode.DEEP) > 7_000L)
+        assertTrue(delay(300, SpeedPacingMode.SMART) > delay(0, SpeedPacingMode.SMART))
+        assertTrue(delay(600, SpeedPacingMode.SMART) > delay(300, SpeedPacingMode.SMART))
+        assertEquals(delay(600, SpeedPacingMode.SMART), delay(600, SpeedPacingMode.DEEP))
+        assertTrue(delay(600, SpeedPacingMode.DEEP) > 7_000L)
     }
 
     @Test fun aComplexWordStillReceivesExtraTimeAtThreeThousandWpm() {
         val word = requireNotNull(SpeedReaderCursor.next("электромагнитный", 0, 1))
         val plain = SpeedReaderCursor.delayMillis(3000, word, pacingMode = SpeedPacingMode.SMART,
-            paragraphPause = false, microPausesEnabled = false, longWordSlowdownPercent = 0)
+            paragraphPause = false, microPausesEnabled = false, complexWordPauseMs = 0)
         val slower = SpeedReaderCursor.delayMillis(3000, word, pacingMode = SpeedPacingMode.SMART,
-            paragraphPause = false, microPausesEnabled = false, longWordSlowdownPercent = 18)
-        assertTrue(slower > plain)
+            paragraphPause = false, microPausesEnabled = false, complexWordPauseMs = 150)
+        assertTrue(slower - plain >= 150L)
     }
 
     @Test fun adaptiveTwoWordFixationCanIsolateOneComplexWord() {

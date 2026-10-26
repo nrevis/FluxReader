@@ -36,6 +36,7 @@ class VisualReviewActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val scene = intent.getStringExtra("scene") ?: "settings"
+        System.setProperty("fluxreader.speedTimingTrace", intent.getBooleanExtra("timingTrace", false).toString())
         val theme = intent.getStringExtra("theme") ?: "wasteland"
         viewModel.setAutoUpdateCheck(false)
         viewModel.updateSettings { it.copy(
@@ -65,7 +66,17 @@ class VisualReviewActivity : ComponentActivity() {
             speedWordsPerFixation = intent.getIntExtra("words", 1),
             speedFontSizeSp = 35f,
             speedHorizontalFocusFraction = 0.50f,
-            speedWpm = 250,
+            speedWpm = intent.getIntExtra("wpm", 250),
+            speedComplexWordPauseMs = intent.getIntExtra("complexMs", it.speedComplexWordPauseMs),
+            speedPacingMode = intent.getStringExtra("pacing")?.let { name -> runCatching { io.fluxreader.app.data.SpeedPacingMode.valueOf(name.uppercase()) }.getOrNull() } ?: it.speedPacingMode,
+            speedMicroPausesEnabled = if (scene == "timing") false else it.speedMicroPausesEnabled,
+            speedParagraphPause = if (scene == "timing") false else it.speedParagraphPause,
+            speedGradualAcceleration = if (scene == "timing") false else it.speedGradualAcceleration,
+            speedAutoRewindAfterPause = if (scene == "timing") false else it.speedAutoRewindAfterPause,
+            speedReedyFlowEnabled = if (scene == "timing") false else it.speedReedyFlowEnabled,
+            speedShowPausePreview = if (scene == "timing") false else it.speedShowPausePreview,
+            speedPauseContextEnabled = if (scene == "timing") false else it.speedPauseContextEnabled,
+            speedShowProgress = if (scene == "timing") false else it.speedShowProgress,
             speedLowerSegmentMode = SpeedLowerSegmentMode.OFF,
             speedChapterIntroMs = intent.getIntExtra("introMs", 0),
         ) }
@@ -151,6 +162,7 @@ class VisualReviewActivity : ComponentActivity() {
             val fixtureName = localBook ?: when (scene) {
                 "pdf" -> "Flux-Visual-Review.pdf"
                 "colors" -> "Flux-Visual-Review-103-colors.txt"
+                "timing" -> "Flux-Visual-Timing-107.txt"
                 else -> "Flux-Visual-Review-98.txt"
             }
             val fixture = File(File(cacheDir, "updates").apply { mkdirs() }, fixtureName)
@@ -181,6 +193,7 @@ class VisualReviewActivity : ComponentActivity() {
 
                 Анна закрыла книгу. В комнате стало тихо.
             """.trimIndent())
+            if (scene == "timing" && localBook == null) fixture.writeText("дом Голпалотта лес Флитвик дом Макгонагалл лес Хагрид дом Гермиона лес Волан-де-Морту дом идентификации лес трансгрессировать дом")
             if (scene == "colors" && localBook == null) fixture.appendText("\n\nПроверка цветов alpha.103.")
             if (viewModel.books.value.none { it.originalName == fixtureName }) {
                 viewModel.importBook(FileProvider.getUriForFile(this@VisualReviewActivity,
@@ -199,7 +212,7 @@ class VisualReviewActivity : ComponentActivity() {
             val state = withTimeout(15_000) {
                 viewModel.speed.first { !it.loading && it.bookId == book.id && it.chapterIndex == chapter && it.chapterText.isNotBlank() }
             }
-            val target = intent.getStringExtra("findText") ?: when (scene) { "unknown", "long" -> "Садитесь"; "ellipsis" -> "…то"; "interrupted" -> "я обязательно"; "prefix" -> "Ты останешься"; else -> "Добрый" }
+            val target = intent.getStringExtra("findText") ?: when (scene) { "unknown", "long" -> "Садитесь"; "ellipsis" -> "…то"; "interrupted" -> "я обязательно"; "timing" -> "дом"; "prefix" -> "Ты останешься"; else -> "Добрый" }
             viewModel.speedSeekToOffset(state.chapterText.indexOf(target).coerceAtLeast(0))
             viewModel.speedPause()
         }

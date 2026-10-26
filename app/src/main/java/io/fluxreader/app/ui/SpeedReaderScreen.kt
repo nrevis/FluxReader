@@ -128,7 +128,13 @@ import io.fluxreader.app.reader.SpeedChunk
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE, COLORS }
+private fun traceSpeedTiming(event: String, state: SpeedUiState, timeMs: Long, requestedMs: Long, settings: ReaderSettings) {
+    if (io.fluxreader.app.BuildConfig.DEBUG && System.getProperty("fluxreader.speedTimingTrace") == "true") {
+        android.util.Log.d("FluxSpeedTiming", "$event|$timeMs|${state.chapterIndex}|${state.chunk?.startOffset}|${state.chunk?.endOffset}|$requestedMs|${settings.speedWpm}|${settings.speedComplexWordPauseMs}|${settings.speedPacingMode}")
+    }
+}
+
+private enum class SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE, COLORS, COMPLEX_WORDS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -336,9 +342,18 @@ fun SpeedReaderScreen(
         }
     }
 
-    val chunkShownAtMs = remember(state.bookId, state.chapterIndex, state.chunk?.startOffset, state.chunk?.endOffset,
-        state.playing, introVisible, voiceMode, state.activeMedia) { SystemClock.elapsedRealtime() }
+    val fixationKey = remember(state.bookId, state.chapterIndex, state.chunk?.startOffset, state.chunk?.endOffset,
+        state.playing, introVisible, voiceMode, state.activeMedia, state.loading, state.error) { Any() }
+    var chunkShownAtMs by remember(fixationKey) { mutableLongStateOf(0L) }
+    LaunchedEffect(fixationKey) {
+        if (state.playing && !voiceMode && !introVisible && !state.loading && state.error == null && state.activeMedia == null) {
+            androidx.compose.runtime.withFrameNanos { }
+            chunkShownAtMs = SystemClock.elapsedRealtime()
+            traceSpeedTiming("shown", state, chunkShownAtMs, 0L, settings)
+        }
+    }
     LaunchedEffect(
+        fixationKey, chunkShownAtMs,
         state.bookId, state.loading, state.error, state.activeMedia, introVisible, voiceMode,
         state.playing,
         state.chapterIndex,
@@ -354,7 +369,7 @@ fun SpeedReaderScreen(
         settings.speedParagraphPauseMs,
         settings.speedAdaptiveSentencePause,
         settings.speedSentenceLengthBonusMs,
-        settings.speedLongWordSlowdownPercent,
+        settings.speedComplexWordPauseMs,
         settings.speedGradualAcceleration,
         settings.speedAccelerationSeconds,
         settings.speedAccelerationStartPercent,
@@ -364,12 +379,12 @@ fun SpeedReaderScreen(
         state.chapterText,
     ) {
         val chunk = state.chunk
-        if (state.playing && !voiceMode && !introVisible && state.activeMedia == null && chunk != null && !state.loading && state.error == null) {
+        if (chunkShownAtMs > 0L && state.playing && !voiceMode && !introVisible && state.activeMedia == null && chunk != null && !state.loading && state.error == null) {
             val elapsed = if (playStartedAtMs > 0L) (SystemClock.elapsedRealtime() - playStartedAtMs).coerceAtLeast(0L) else 0L
             val effectiveWpm = SpeedReaderCursor.rampedWpm(
                 targetWpm = settings.speedWpm,
                 elapsedMs = elapsed,
-                enabled = settings.speedGradualAcceleration,
+                enabled = settings.speedGradualAcceleration && settings.speedPacingMode != SpeedPacingMode.CONSTANT,
                 startPercent = settings.speedAccelerationStartPercent,
                 durationSeconds = settings.speedAccelerationSeconds,
             )
@@ -389,9 +404,10 @@ fun SpeedReaderScreen(
                     paragraphPauseMs = settings.speedParagraphPauseMs,
                     adaptiveSentencePause = settings.speedAdaptiveSentencePause,
                     sentenceLengthBonusMs = settings.speedSentenceLengthBonusMs,
-                    longWordSlowdownPercent = settings.speedLongWordSlowdownPercent,
+                    complexWordPauseMs = settings.speedComplexWordPauseMs,
                 ) + dialoguePause
             delay((durationMs - (SystemClock.elapsedRealtime() - chunkShownAtMs)).coerceAtLeast(0L))
+            traceSpeedTiming("advance", state, SystemClock.elapsedRealtime(), durationMs, settings)
             viewModel.speedAdvance(state.bookId, state.chapterIndex, chunk.startOffset, chunk.endOffset)
         }
     }
@@ -562,6 +578,8 @@ fun SpeedReaderScreen(
             onBack = { settingsPanel = SpeedSettingsPanel.HUB },
             onDismiss = { settingsPanel = SpeedSettingsPanel.NONE },
         )
+        SpeedSettingsPanel.COMPLEX_WORDS -> SpeedComplexWordSheet(settings, viewModel::updateSettings,
+            onBack = { settingsPanel = SpeedSettingsPanel.HUB }, onDismiss = { settingsPanel = SpeedSettingsPanel.NONE })
         SpeedSettingsPanel.BEHAVIOR -> SpeedBehaviorSheet(
             settings = settings,
             viewModel = viewModel,
@@ -625,6 +643,7 @@ fun SpeedReaderScreen(
             SpeedSettingsPanel.COLORS -> SpeedSettingsPanel.DIALOGUE
             SpeedSettingsPanel.DISPLAY,
             SpeedSettingsPanel.BEHAVIOR,
+            SpeedSettingsPanel.COMPLEX_WORDS,
             SpeedSettingsPanel.VOICE,
             SpeedSettingsPanel.EFFECTS,
             SpeedSettingsPanel.ADVANCED,
@@ -1665,34 +1684,7 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                             selected = settings.speedPacingMode == pacing,
                             modifier = Modifier.weight(1f),
                         ) {
-                            viewModel.updateSettings { current ->
-                                when (pacing) {
-                                    SpeedPacingMode.CONSTANT -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = false,
-                                        speedGradualAcceleration = false,
-                                        speedLongWordSlowdownPercent = 0,
-                                    )
-                                    SpeedPacingMode.SMART -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = true,
-                                        speedSentencePauseMs = 170,
-                                        speedClausePauseMs = 65,
-                                        speedParagraphPauseMs = 260,
-                                        speedLongWordSlowdownPercent = 18,
-                                        speedGradualAcceleration = true,
-                                    )
-                                    SpeedPacingMode.DEEP -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = true,
-                                        speedSentencePauseMs = 230,
-                                        speedClausePauseMs = 95,
-                                        speedParagraphPauseMs = 380,
-                                        speedLongWordSlowdownPercent = 28,
-                                        speedGradualAcceleration = true,
-                                    )
-                                }
-                            }
+                            viewModel.updateSettings { it.copy(speedPacingMode = pacing) }
                         }
                     }
                 }
@@ -1722,40 +1714,13 @@ private fun SpeedControls(settings: ReaderSettings, viewModel: AppViewModel, tex
                 valueRange = 100f..3000f,
                 steps = 28,
             )
-            Text("Профиль чтения", color = textColor.copy(alpha = 0.66f), style = MaterialTheme.typography.labelMedium)
+            Text("Темп показа", color = textColor.copy(alpha = 0.66f), style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                 SpeedPacingMode.entries.forEach { pacing ->
                     FilterChip(
                         selected = settings.speedPacingMode == pacing,
                         onClick = {
-                            viewModel.updateSettings { current ->
-                                when (pacing) {
-                                    SpeedPacingMode.CONSTANT -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = false,
-                                        speedGradualAcceleration = false,
-                                        speedLongWordSlowdownPercent = 0,
-                                    )
-                                    SpeedPacingMode.SMART -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = true,
-                                        speedSentencePauseMs = 170,
-                                        speedClausePauseMs = 65,
-                                        speedParagraphPauseMs = 260,
-                                        speedLongWordSlowdownPercent = 18,
-                                        speedGradualAcceleration = true,
-                                    )
-                                    SpeedPacingMode.DEEP -> current.copy(
-                                        speedPacingMode = pacing,
-                                        speedMicroPausesEnabled = true,
-                                        speedSentencePauseMs = 230,
-                                        speedClausePauseMs = 95,
-                                        speedParagraphPauseMs = 380,
-                                        speedLongWordSlowdownPercent = 28,
-                                        speedGradualAcceleration = true,
-                                    )
-                                }
-                            }
+                            viewModel.updateSettings { it.copy(speedPacingMode = pacing) }
                         },
                         label = { Text(pacingLabel(pacing)) },
                     )
@@ -1786,6 +1751,7 @@ private fun SpeedSettingsHub(
                 viewModel.updateSettings { it.copy(speedFontSizeSp = value) }
             }
             SpeedSettingsNavRow("Отображение", "") { onOpen(SpeedSettingsPanel.DISPLAY) }
+            SpeedSettingsNavRow("Сложные слова", "") { onOpen(SpeedSettingsPanel.COMPLEX_WORDS) }
             SpeedSettingsNavRow("Поведение", "") { onOpen(SpeedSettingsPanel.BEHAVIOR) }
             SpeedSettingsNavRow("Эксперимент: диалоги", "") { onOpen(SpeedSettingsPanel.DIALOGUE) }
             SpeedSettingsNavRow("Голос и озвучка", "") { onOpen(SpeedSettingsPanel.VOICE) }
@@ -2119,10 +2085,7 @@ private fun SpeedAdvancedSheet(
                 SettingsValueSlider("Запятая / ; / :", settings.speedClausePauseMs.toFloat(), 0f..350f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedClausePauseMs = value.toInt()) } }
                 SettingsValueSlider("Абзац", settings.speedParagraphPauseMs.toFloat(), 0f..1200f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedParagraphPauseMs = value.toInt()) } }
             }
-            if (settings.speedPacingMode != SpeedPacingMode.CONSTANT) {
-                SettingsValueSlider("Замедление длинных слов", settings.speedLongWordSlowdownPercent.toFloat(), 0f..60f,
-                    { "${it.toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedLongWordSlowdownPercent = value.toInt()) } }
-            }
+            SpeedComplexWordSettings(settings, viewModel::updateSettings)
             SettingsToggleRow(
                 title = "Плавный разгон",
                 subtitle = "",

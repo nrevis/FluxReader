@@ -90,7 +90,7 @@ class ReaderSettingsRepository(context: Context) {
             .putInt("speedParagraphPauseMsV6", next.speedParagraphPauseMs)
             .putBoolean("speedAdaptiveSentencePauseV6", next.speedAdaptiveSentencePause)
             .putInt("speedSentenceLengthBonusMsV6", next.speedSentenceLengthBonusMs)
-            .putInt("speedLongWordSlowdownPercentV6", next.speedLongWordSlowdownPercent)
+            .putInt("speedComplexWordExtraMsV1", next.speedComplexWordPauseMs)
             .putBoolean("speedGradualAccelerationV6", next.speedGradualAcceleration)
             .putInt("speedAccelerationSecondsV6", next.speedAccelerationSeconds)
             .putInt("speedAccelerationStartPercentV6", next.speedAccelerationStartPercent)
@@ -255,7 +255,8 @@ class ReaderSettingsRepository(context: Context) {
                 speedParagraphPauseMs = prefs.getInt("speedParagraphPauseMsV6", 260),
                 speedAdaptiveSentencePause = prefs.getBoolean("speedAdaptiveSentencePauseV6", true),
                 speedSentenceLengthBonusMs = prefs.getInt("speedSentenceLengthBonusMsV6", 120),
-                speedLongWordSlowdownPercent = prefs.getInt("speedLongWordSlowdownPercentV6", 18),
+                speedComplexWordPauseMs = if (prefs.contains("speedComplexWordExtraMsV1")) prefs.getInt("speedComplexWordExtraMsV1", 150)
+                    else migratedComplexWordPauseMs(if (prefs.contains("speedLongWordSlowdownPercentV6")) prefs.getInt("speedLongWordSlowdownPercentV6", 18) else null),
                 speedGradualAcceleration = prefs.getBoolean("speedGradualAccelerationV6", true),
                 speedAccelerationSeconds = prefs.getInt("speedAccelerationSecondsV6", 5),
                 speedAccelerationStartPercent = prefs.getInt("speedAccelerationStartPercentV6", 72),
@@ -349,7 +350,7 @@ class ReaderSettingsRepository(context: Context) {
         speedClausePauseMs = value.speedClausePauseMs.coerceIn(0, 350),
         speedParagraphPauseMs = value.speedParagraphPauseMs.coerceIn(0, 1_200),
         speedSentenceLengthBonusMs = value.speedSentenceLengthBonusMs.coerceIn(0, 400),
-        speedLongWordSlowdownPercent = value.speedLongWordSlowdownPercent.coerceIn(0, 60),
+        speedComplexWordPauseMs = value.speedComplexWordPauseMs.coerceIn(0, 800),
         speedAccelerationSeconds = value.speedAccelerationSeconds.coerceIn(1, 20),
         speedAccelerationStartPercent = value.speedAccelerationStartPercent.coerceIn(45, 100),
         speedAutoRewindThresholdSeconds = value.speedAutoRewindThresholdSeconds.coerceIn(3, 60),

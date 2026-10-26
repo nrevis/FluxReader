@@ -198,7 +198,8 @@ object SpeedReaderCursor {
     /**
      * Keeps WPM as the baseline while adding small processing windows at semantic boundaries.
      * Sentence/clause pauses are fixed milliseconds rather than WPM fractions so they remain
-     * perceptible at high speeds. DEEP scales semantic/complexity adjustments upward.
+     * perceptible at high speeds. Complex words receive the selected extra milliseconds at every
+     * WPM, while DEEP scales semantic pauses independently of that setting.
      */
     fun delayMillis(
         wpm: Int,
@@ -212,7 +213,7 @@ object SpeedReaderCursor {
         paragraphPauseMs: Int = 260,
         adaptiveSentencePause: Boolean = true,
         sentenceLengthBonusMs: Int = 120,
-        longWordSlowdownPercent: Int = 18,
+        complexWordPauseMs: Int = 150,
     ): Long {
         val base = 60_000.0 / wpm.coerceIn(100, 3000).toDouble()
         if (pacingMode == SpeedPacingMode.CONSTANT) {
@@ -220,33 +221,15 @@ object SpeedReaderCursor {
         }
 
         val deep = pacingMode == SpeedPacingMode.DEEP
-        val complexityScale = if (deep) 1.30 else 1.0
-        val configuredLongWord = longWordSlowdownPercent.coerceIn(0, 60) / 100.0
         var wordUnits = 0.0
+        var complexityUnits = 0.0
         for (token in chunk.tokens) {
             val lexical = lexicalCore(token)
-            val length = lexical.length
-            var weight = when {
-                length <= 3 -> 0.92
-                length <= 7 -> 1.0
-                length <= 11 -> 1.0 + configuredLongWord * 0.45 * complexityScale
-                length <= 16 -> 1.0 + configuredLongWord * 0.90 * complexityScale
-                else -> 1.0 + configuredLongWord * 1.35 * complexityScale
-            }
-            if (lexical.any(Char::isDigit)) weight += 0.10 * complexityScale
-            if (lexical.length >= 3 && lexical.count(Char::isUpperCase) >= lexical.length * 2 / 3) {
-                weight += 0.08 * complexityScale
-            }
-            if ('/' in lexical || '@' in lexical || lexical.startsWith("http", ignoreCase = true)) {
-                weight += 0.16 * complexityScale
-            }
-            if (lexical.any { !it.isLetterOrDigit() && it != '-' && it != '–' && it != '—' }) {
-                weight += 0.04 * complexityScale
-            }
-            wordUnits += weight
+            wordUnits += if (lexical.length <= 3) 0.92 else 1.0
+            complexityUnits += SpeedWordComplexity.score(token)
         }
 
-        var totalMs = base * wordUnits
+        var totalMs = base * wordUnits + complexWordPauseMs.coerceIn(0, 800) * complexityUnits
         val last = chunk.tokens.lastOrNull().orEmpty()
         val paragraphBreak = paragraphPause && hasParagraphBreakAfter(chapterText, chunk.endOffset)
         val semanticScale = if (deep) 1.28 else 1.0
@@ -429,9 +412,7 @@ object SpeedReaderCursor {
         val lexical = preview.map(::lexicalCore)
         val visible = lexical.take(base)
         val averageLength = visible.map { it.length }.average().takeIf { !it.isNaN() } ?: 5.0
-        val hasComplex = visible.any { token ->
-            token.length >= 13 || token.any(Char::isDigit) || '/' in token || '@' in token || token.startsWith("http", true)
-        }
+        val hasComplex = visible.any { SpeedWordComplexity.score(it) >= 1.0 }
         val deep = pacingMode == SpeedPacingMode.DEEP
         var adjusted = base
         if (hasComplex || averageLength >= if (deep) 7.0 else 8.5) adjusted--

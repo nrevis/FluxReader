@@ -178,7 +178,7 @@ data class ReaderSettings(
     val speedParagraphPauseMs: Int = 260,
     val speedAdaptiveSentencePause: Boolean = true,
     val speedSentenceLengthBonusMs: Int = 120,
-    val speedLongWordSlowdownPercent: Int = 18,
+    val speedComplexWordPauseMs: Int = 150,
     val speedGradualAcceleration: Boolean = true,
     val speedAccelerationSeconds: Int = 5,
     val speedAccelerationStartPercent: Int = 72,

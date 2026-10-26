@@ -384,7 +384,7 @@ private fun SpeedSettings(settings: ReaderSettings, viewModel: AppViewModel) {
     ) { enabled -> viewModel.updateSettings { it.copy(speedSmartChunking = enabled) } }
     SettingsToggleRow(
         "Микропаузы",
-        "На пунктуации и сложных словах.",
+        "На пунктуации.",
         settings.speedMicroPausesEnabled,
     ) { enabled -> viewModel.updateSettings { it.copy(speedMicroPausesEnabled = enabled) } }
     SettingsToggleRow(
@@ -402,6 +402,8 @@ private fun SpeedSettings(settings: ReaderSettings, viewModel: AppViewModel) {
         "К началу предложения после долгой паузы.",
         settings.speedAutoRewindAfterPause,
     ) { enabled -> viewModel.updateSettings { it.copy(speedAutoRewindAfterPause = enabled) } }
+    Text("Сложные слова", style = MaterialTheme.typography.titleMedium)
+    SpeedComplexWordSettings(settings, viewModel::updateSettings)
     Text("Экспериментальные функции", style = MaterialTheme.typography.titleMedium)
     SpeedDialogueSettings(settings, viewModel::updateSettings)
 }

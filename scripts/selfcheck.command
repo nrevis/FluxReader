@@ -581,7 +581,7 @@ grep -q 'suspend fun speedDocument' "$CONTENT_REPO"
 grep -q 'SpeedMediaFrame' "$SPEED_SCREEN"
 grep -q 'SpeedChapterIntro' "$SPEED_SCREEN"
 grep -q 'SpeedPausePreview' "$SPEED_SCREEN"
-grep -q 'SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE, COLORS }' "$SPEED_SCREEN"
+grep -q 'SpeedSettingsPanel { NONE, HUB, DISPLAY, BEHAVIOR, VOICE, EFFECTS, ADVANCED, DIALOGUE, COLORS, COMPLEX_WORDS }' "$SPEED_SCREEN"
 grep -q 'speedImagePauseMsV10' "$SETTINGS_REPO"
 grep -q 'speedVolumeKeysEnabledV10' "$SETTINGS_REPO"
 grep -Fq 'valueRange = 100f..3000f' "$SPEED_SCREEN"
@@ -1722,6 +1722,13 @@ fi
 echo '✅ alpha.73 screen + media integration checks OK'
 
 python3 scripts/review_alpha84.py
+
+# alpha.107: complex-word timing is in real milliseconds, separate from punctuation and WPM.
+grep -q 'speedComplexWordExtraMsV1' "$SETTINGS_REPO"
+grep -q 'migratedComplexWordPauseMs' "$SETTINGS_REPO"
+grep -q 'complexWordPauseMs = settings.speedComplexWordPauseMs' "$SPEED_SCREEN"
+grep -q 'withFrameNanos' "$SPEED_SCREEN"
+grep -q 'class SpeedComplexWordTimingTest' app/src/test/java/io/fluxreader/app/reader/SpeedComplexWordTimingTest.kt
 
 if (( STATIC_ONLY )); then
   echo

@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.106",
-  "versionCode": 20123,
+  "versionName": "0.2.0-alpha.107",
+  "versionCode": 20124,
   "line": "0.2-clean-rewrite",
-  "focus": "speaker-colored-speech-speed-guides-and-playback-fixes"
+  "focus": "perceptible-complex-word-timing-and-visible-frame-clock"
 }

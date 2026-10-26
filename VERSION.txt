@@ -1,2 +1,2 @@
-versionName=0.2.0-alpha.106
-versionCode=20123
+versionName=0.2.0-alpha.107
+versionCode=20124
