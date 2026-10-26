@@ -44,6 +44,11 @@ class VisualReviewActivity : ComponentActivity() {
             experimentalPalette = null,
             experimentalCrtEnabled = intent.getBooleanExtra("effects", false),
             speedDialogueEnabled = intent.getBooleanExtra("dialogues", true),
+            speedDialogueTextColor = intent.getBooleanExtra("speechColor", false),
+            speedShowGuide = intent.getBooleanExtra("guide", true),
+            speedGuideStyle = intent.getStringExtra("guideStyle")?.let { name ->
+                runCatching { io.fluxreader.app.data.SpeedGuideStyle.valueOf(name.uppercase()) }.getOrNull()
+            } ?: io.fluxreader.app.data.SpeedGuideStyle.TICKS,
             speedDialogueBookAnalysis = intent.getBooleanExtra("bookAnalysis", false),
             speedSpeakerColor = when (intent.getStringExtra("speakerColor")) {
                 "theme" -> SpeedSpeakerColor.THEME
@@ -56,12 +61,13 @@ class VisualReviewActivity : ComponentActivity() {
             speedSpeakerFontSizeSp = intent.getIntExtra("nameSize", 24).toFloat(),
             speedSpeakerPosition = if (intent.getBooleanExtra("below", false)) SpeedSpeakerPosition.BELOW else SpeedSpeakerPosition.ABOVE,
             speedDialogueShortReplies = scene != "ellipsis",
-            speedMode = SpeedMode.RSVP,
+            speedMode = intent.getStringExtra("speedMode")?.let { name -> runCatching { SpeedMode.valueOf(name.uppercase()) }.getOrNull() } ?: SpeedMode.RSVP,
+            speedWordsPerFixation = intent.getIntExtra("words", 1),
             speedFontSizeSp = 35f,
             speedHorizontalFocusFraction = 0.50f,
             speedWpm = 250,
             speedLowerSegmentMode = SpeedLowerSegmentMode.OFF,
-            speedChapterIntroMs = 0,
+            speedChapterIntroMs = intent.getIntExtra("introMs", 0),
         ) }
         setContent { FluxReaderApp(viewModel) }
         if (scene == "voices") {

@@ -68,6 +68,7 @@ class ReaderSettingsRepository(context: Context) {
             .putBoolean("speedDialogueNamesV1", next.speedDialogueNames)
             .putBoolean("speedDialogueBookAnalysisV1", next.speedDialogueBookAnalysis)
             .putBoolean("speedDialogueIndicatorV1", next.speedDialogueIndicator)
+            .putBoolean("speedDialogueTextColorV1", next.speedDialogueTextColor)
             .putString("speedSpeakerStyleV1", next.speedSpeakerStyle.name)
             .putString("speedSpeakerPositionV1", next.speedSpeakerPosition.name)
             .putString("speedSpeakerColorV1", next.speedSpeakerColor.name)
@@ -124,6 +125,7 @@ class ReaderSettingsRepository(context: Context) {
             .putString("speedFocusStyleV3", next.speedFocusStyle.name)
             .putFloat("speedContextOpacityV3", next.speedContextOpacity)
             .putBoolean("speedShowGuideV3", next.speedShowGuide)
+            .putString("speedGuideStyleV1", next.speedGuideStyle.name)
             .putBoolean("speedShowFocusTicksV3", next.speedShowFocusTicks)
             .putFloat("speedGuideHeightFractionV3", next.speedGuideHeightFraction)
             .putFloat("speedGuideWidthDpV3", next.speedGuideWidthDp)
@@ -231,6 +233,7 @@ class ReaderSettingsRepository(context: Context) {
                 speedDialogueNames = prefs.getBoolean("speedDialogueNamesV1", true),
                 speedDialogueBookAnalysis = prefs.getBoolean("speedDialogueBookAnalysisV1", false),
                 speedDialogueIndicator = prefs.getBoolean("speedDialogueIndicatorV1", true),
+                speedDialogueTextColor = prefs.getBoolean("speedDialogueTextColorV1", false),
                 speedSpeakerStyle = runCatching { SpeedSpeakerStyle.valueOf(prefs.getString("speedSpeakerStyleV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerStyle.BUBBLE),
                 speedSpeakerPosition = runCatching { SpeedSpeakerPosition.valueOf(prefs.getString("speedSpeakerPositionV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerPosition.ABOVE),
                 speedSpeakerColor = runCatching { SpeedSpeakerColor.valueOf(prefs.getString("speedSpeakerColorV1", null).orEmpty()) }.getOrDefault(SpeedSpeakerColor.THEME),
@@ -287,6 +290,7 @@ class ReaderSettingsRepository(context: Context) {
                 speedFocusStyle = speedFocusStyle,
                 speedContextOpacity = prefs.getFloat("speedContextOpacityV3", prefs.getFloat("speedContextOpacityV2", 0.45f)),
                 speedShowGuide = prefs.getBoolean("speedShowGuideV3", prefs.getBoolean("speedShowGuideV2", true)),
+                speedGuideStyle = enumPref("speedGuideStyleV1", SpeedGuideStyle.TICKS),
                 speedShowFocusTicks = prefs.getBoolean("speedShowFocusTicksV3", true),
                 speedGuideHeightFraction = prefs.getFloat("speedGuideHeightFractionV3", 0.40f),
                 speedGuideWidthDp = prefs.getFloat("speedGuideWidthDpV3", 1f),

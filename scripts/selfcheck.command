@@ -606,7 +606,10 @@ grep -q 'val speedFixedFontSize: Boolean = true' "$MODELS"
 grep -q 'val speedHorizontalFocusFraction: Float = 0.30f' "$MODELS"
 grep -q 'speedFixedFontSizeV11' "$SETTINGS_REPO"
 grep -q 'speedHorizontalFocusFractionV11' "$SETTINGS_REPO"
-grep -q 'horizontalFocusPx(size.width, horizontalFocusPosition)' "$SPEED_SCREEN"
+grep -q 'val guideFraction = if (pinnedRsvp) SpeedViewportGeometry.clampHorizontalFocusFraction' "$SPEED_SCREEN"
+grep -q 'horizontalFocusPosition = guideFraction' "$SPEED_SCREEN"
+grep -q 'SpeedGuideGeometry.bounds' app/src/main/java/io/fluxreader/app/ui/SpeedFocusGuide.kt
+grep -q 'nameAndContextLeaveVisibleMarkersOutsideTheReadingLine' app/src/test/java/io/fluxreader/app/ui/SpeedGuideGeometryTest.kt
 grep -q 'val currentLeftPx = focusTargetPx - focusCenterPx' "$SPEED_SCREEN"
 grep -q 'settings.speedFixedFontSize -> baseSize' "$SPEED_SCREEN"
 grep -q 'speedHorizontalFocusDefaultsToLeftThird' app/src/test/java/io/fluxreader/app/ui/ReaderPaginationPolicyTest.kt

@@ -23,10 +23,12 @@ data class SpeedTextWindow(
 )
 
 object SpeedReaderCursor {
-    private val sentenceEnd = Regex("[.!?…]+[\\\"'»”’)]*$")
-    private val clauseEnd = Regex("[,;:]+[\\\"'»”’)]*$")
-    private val trailingDash = Regex("[—–-]+[\\\"'»”’)]*$")
-    private val tokenPattern = Regex("\\S+")
+    private val sentenceEnd = Regex("[.!?…]+[\\\"'»”’)\\]}]*$")
+    private val clauseEnd = Regex("[,;:]+[\\\"'»”’)\\]}]*$")
+    private val trailingDash = Regex("[—–-]+[\\\"'»”’)\\]}]*$")
+    // Match the whitespace accepted by the streaming cursor, including EPUB NBSP/narrow NBSP.
+    private val tokenPattern = Regex("[^\\s\\p{Zs}\\p{Zl}\\p{Zp}\\u001C-\\u001F]+")
+    private val paragraphBoundary = Regex("\n[\\p{Zs}\\t\\r]*\n+")
     private val commonAbbreviation = Regex(
         "(?iu)^(?:т\\.д|т\\.п|т\\.е|т\\.к|и\\.т\\.д|и\\.т\\.п|г|гг|стр|рис|табл|см|им|ул|д|кв|корп|ред|пер|ок|проф|доц|акад|тов|г-н|г-жа)\\.$"
     )
@@ -82,7 +84,8 @@ object SpeedReaderCursor {
         // In phrase/focus modes do not leave a short connector dangling at the end of a fixation.
         // Pull exactly one following token when it keeps a natural Russian phrase together. RSVP
         // (wordCount = 1) intentionally remains one-token-at-a-time.
-        if (smartChunking && count > 1 && tokens.size in 1..6 && shouldGlueNextToken(tokens.last())) {
+        if (smartChunking && count > 1 && tokens.size in 1..6 && shouldGlueNextToken(tokens.last()) &&
+            !hasParagraphBreakAfter(text, cursor)) {
             var extraCursor = cursor
             while (extraCursor < text.length && text[extraCursor].isWhitespace()) extraCursor++
             if (extraCursor < text.length) {
@@ -157,7 +160,16 @@ object SpeedReaderCursor {
             cleanLength <= 13 -> 3
             else -> 4
         }
-        return (lexicalStart + withinWord).coerceIn(0, token.lastIndex)
+        val target = (lexicalStart + withinWord).coerceIn(0, token.lastIndex)
+        // Hyphens, fraction bars and combining accents can fall inside the lexical range.
+        if (token[target].isLetterOrDigit()) return target
+        for (distance in 1..token.lastIndex) {
+            val left = target - distance
+            if (left >= 0 && token[left].isLetterOrDigit()) return left
+            val right = target + distance
+            if (right < token.length && token[right].isLetterOrDigit()) return right
+        }
+        return target
     }
 
     /**
@@ -204,7 +216,7 @@ object SpeedReaderCursor {
     ): Long {
         val base = 60_000.0 / wpm.coerceIn(100, 3000).toDouble()
         if (pacingMode == SpeedPacingMode.CONSTANT) {
-            return (base * chunk.tokens.size.coerceAtLeast(1)).toLong().coerceIn(25L, 3_000L)
+            return (base * chunk.tokens.size.coerceAtLeast(1)).toLong().coerceAtLeast(20L)
         }
 
         val deep = pacingMode == SpeedPacingMode.DEEP
@@ -244,7 +256,7 @@ object SpeedReaderCursor {
                 isSentenceBoundary(last) -> {
                     val normalized = last.trimEnd('”', '’', '»', ')', ']', '}', '\'', '"')
                     val punctuationScale = when {
-                        normalized.endsWith("…") -> 1.25
+                        normalized.endsWith("…") || normalized.endsWith("...") -> 1.25
                         normalized.endsWith("!") || normalized.endsWith("?") -> 1.10
                         else -> 1.0
                     }
@@ -271,7 +283,9 @@ object SpeedReaderCursor {
         if (paragraphBreak) {
             totalMs += paragraphPauseMs.coerceIn(0, 1_200) * semanticScale
         }
-        return totalMs.toLong().coerceIn(25L, 4_500L)
+        // 20 ms preserves 3000 WPM. A fixed upper cap would silently accelerate long phrases
+        // at low WPM and erase the configured complex-word slowdown.
+        return totalMs.toLong().coerceAtLeast(20L)
     }
 
     fun hasSemanticPause(chunk: SpeedChunk, chapterText: String = ""): Boolean {
@@ -289,7 +303,8 @@ object SpeedReaderCursor {
     fun sentenceStartOffset(text: String, offset: Int): Int {
         if (text.isBlank()) return 0
         val bounded = offset.coerceIn(0, text.length)
-        val tokens = tokenPattern.findAll(text.substring(0, bounded)).toList()
+        // Never classify a truncated current token (for example the "3." prefix of "3.14").
+        val tokens = tokenPattern.findAll(text).takeWhile { it.range.last < bounded }.toList()
         for (match in tokens.asReversed()) {
             if (isSentenceBoundary(match.value)) {
                 return nextNonWhitespace(text, match.range.last + 1).coerceAtMost(text.length)
@@ -322,12 +337,14 @@ object SpeedReaderCursor {
     fun nextSentenceOffset(text: String, offset: Int): Int? {
         if (text.isBlank()) return null
         val bounded = offset.coerceIn(0, text.length)
-        val previousToken = tokenPattern.findAll(text.substring(0, bounded)).lastOrNull()?.value
-        if (previousToken != null && isSentenceBoundary(previousToken)) {
+        val previousToken = tokenPattern.findAll(text).takeWhile { it.range.last < bounded }.lastOrNull()
+        if (previousToken != null && isSentenceBoundary(previousToken.value) &&
+            text.substring(previousToken.range.last + 1, bounded).isBlank()) {
             val direct = nextNonWhitespace(text, bounded)
             return direct.takeIf { it < text.length }
         }
-        for (match in tokenPattern.findAll(text, bounded)) {
+        val scanStart = if (bounded < text.length && !text[bounded].isWhitespace()) wordStartOffset(text, bounded) else bounded
+        for (match in tokenPattern.findAll(text, scanStart)) {
             if (isSentenceBoundary(match.value)) {
                 val next = nextNonWhitespace(text, match.range.last + 1)
                 return next.takeIf { it < text.length }
@@ -339,7 +356,7 @@ object SpeedReaderCursor {
     fun previousParagraphOffset(text: String, offset: Int): Int? {
         if (text.isBlank() || offset <= 0) return null
         val bounded = offset.coerceIn(0, text.length)
-        val breaks = Regex("\n[ \t]*\n+").findAll(text.substring(0, bounded)).toList()
+        val breaks = paragraphBoundary.findAll(text.substring(0, bounded)).toList()
         val currentStart = breaks.lastOrNull()?.range?.last?.plus(1)?.let { nextNonWhitespace(text, it) } ?: 0
         if (bounded - currentStart > 2) return currentStart
         val previous = breaks.dropLast(1).lastOrNull() ?: return if (currentStart > 0) 0 else null
@@ -349,7 +366,7 @@ object SpeedReaderCursor {
     fun nextParagraphOffset(text: String, offset: Int): Int? {
         if (text.isBlank()) return null
         val bounded = offset.coerceIn(0, text.length)
-        val match = Regex("\n[ \t]*\n+").find(text, bounded) ?: return null
+        val match = paragraphBoundary.find(text, bounded) ?: return null
         val next = nextNonWhitespace(text, match.range.last + 1)
         return next.takeIf { it < text.length }
     }
@@ -420,7 +437,7 @@ object SpeedReaderCursor {
         if (hasComplex || averageLength >= if (deep) 7.0 else 8.5) adjusted--
         if (deep && averageLength >= 10.0) adjusted--
         if (!deep && !hasComplex && averageLength <= 4.2 && preview.size > base) adjusted++
-        return adjusted.coerceIn(2, 7)
+        return adjusted.coerceIn(1, 7)
     }
 
     private fun lexicalCore(token: String): String = token.trim(

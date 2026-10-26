@@ -121,6 +121,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import io.fluxreader.app.reader.SpeedMediaCue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import io.fluxreader.app.reader.DialogueTextColoring
+import io.fluxreader.app.reader.SpeedChunk
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -160,7 +164,7 @@ fun SpeedReaderScreen(
         else -> Color(settings.speedFocusColorArgb)
     }
     val guideColor = when {
-        wastelandTheme -> pal.border.copy(alpha = 0.72f)
+        wastelandTheme -> pal.accent.copy(alpha = 0.70f)
         cyberTheme -> pal.secondary.copy(alpha = 0.72f)
         settings.speedUseReaderTheme -> appScheme.onSurfaceVariant.copy(alpha = 0.42f)
         else -> Color(settings.speedGuideColorArgb)
@@ -170,7 +174,7 @@ fun SpeedReaderScreen(
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var speedTuningExpanded by rememberSaveable { mutableStateOf(false) }
     var introVisible by remember { mutableStateOf(false) }
-    var introChapterIndex by rememberSaveable { mutableIntStateOf(-1) }
+    var introChapterIndex by rememberSaveable(state.bookId) { mutableIntStateOf(-1) }
     var playStartedAtMs by remember { mutableLongStateOf(0L) }
     val localView = LocalView.current
     val context = LocalContext.current
@@ -309,15 +313,15 @@ fun SpeedReaderScreen(
         }
     }
 
-    LaunchedEffect(state.chapterIndex, state.loading, settings.speedChapterIntroMs, voiceMode) {
+    LaunchedEffect(state.bookId, state.chapterIndex, state.loading, state.chunk != null, settings.speedChapterIntroMs, voiceMode) {
         if (!voiceMode && !state.loading && state.chunk != null && state.chapterIndex != introChapterIndex && settings.speedChapterIntroMs > 0) {
-            val resume = state.playing
-            if (resume) viewModel.speedPause()
             introChapterIndex = state.chapterIndex
             introVisible = true
-            delay(settings.speedChapterIntroMs.toLong())
-            introVisible = false
-            if (resume && state.activeMedia == null) viewModel.speedToggle()
+            try {
+                delay(settings.speedChapterIntroMs.toLong())
+            } finally {
+                introVisible = false
+            }
         }
     }
 
@@ -332,7 +336,10 @@ fun SpeedReaderScreen(
         }
     }
 
+    val chunkShownAtMs = remember(state.bookId, state.chapterIndex, state.chunk?.startOffset, state.chunk?.endOffset,
+        state.playing, introVisible, voiceMode, state.activeMedia) { SystemClock.elapsedRealtime() }
     LaunchedEffect(
+        state.bookId, state.loading, state.error, state.activeMedia, introVisible, voiceMode,
         state.playing,
         state.chapterIndex,
         state.chunk?.startOffset,
@@ -357,7 +364,7 @@ fun SpeedReaderScreen(
         state.chapterText,
     ) {
         val chunk = state.chunk
-        if (state.playing && chunk != null && !state.loading && state.error == null) {
+        if (state.playing && !voiceMode && !introVisible && state.activeMedia == null && chunk != null && !state.loading && state.error == null) {
             val elapsed = if (playStartedAtMs > 0L) (SystemClock.elapsedRealtime() - playStartedAtMs).coerceAtLeast(0L) else 0L
             val effectiveWpm = SpeedReaderCursor.rampedWpm(
                 targetWpm = settings.speedWpm,
@@ -370,8 +377,7 @@ fun SpeedReaderScreen(
                 SpeedDialogueAnalyzer.isReplyStart(state.chapterText, chunk.startOffset)) {
                 settings.speedDialoguePauseMs.toLong()
             } else 0L
-            delay(
-                SpeedReaderCursor.delayMillis(
+            val durationMs = SpeedReaderCursor.delayMillis(
                     wpm = effectiveWpm,
                     chunk = chunk,
                     chapterText = state.chapterText,
@@ -385,8 +391,8 @@ fun SpeedReaderScreen(
                     sentenceLengthBonusMs = settings.speedSentenceLengthBonusMs,
                     longWordSlowdownPercent = settings.speedLongWordSlowdownPercent,
                 ) + dialoguePause
-            )
-            viewModel.speedAdvance()
+            delay((durationMs - (SystemClock.elapsedRealtime() - chunkShownAtMs)).coerceAtLeast(0L))
+            viewModel.speedAdvance(state.bookId, state.chapterIndex, chunk.startOffset, chunk.endOffset)
         }
     }
 
@@ -704,6 +710,23 @@ private fun SpeedViewport(
                     state.dialogueIndex, state.dialogueCorrections)
             } else null
         }
+        val colorInput = remember(state.chapterText, state.dialogueIndex, state.dialogueCorrections, state.speakerColors,
+            settings.speedDialogueEnabled, settings.speedDialogueTextColor) { Any() }
+        val colorSnapshot by produceState<Pair<Any, DialogueTextColoring>?>(null, colorInput) {
+            value = if (settings.speedDialogueEnabled && settings.speedDialogueTextColor) withContext(Dispatchers.Default) {
+                colorInput to DialogueTextColoring(state.chapterText, state.dialogueIndex, state.dialogueCorrections, state.speakerColors)
+            } else null
+        }
+        val speechColoring = colorSnapshot?.takeIf { it.first === colorInput }?.second
+        val speechBackground = when {
+            settings.useWastelandDesign || settings.useCyberpunkDesign -> LocalExperimentalColors.current.background
+            settings.speedUseReaderTheme -> MaterialTheme.colorScheme.background
+            else -> Color(settings.speedBackgroundColorArgb)
+        }
+        val themedPanel = LocalExperimentalColors.current.panel.takeIf { settings.useWastelandDesign || settings.useCyberpunkDesign }
+        val speakerColor: (String) -> Color = { name ->
+            speedSpeakerReadingInk(name, settings, speechBackground, focusColor, state.speakerColors.forName(name), themedPanel)
+        }
         val mainTextHeightPx = with(density) {
             (settings.speedFontSizeSp * settings.speedLineHeightMultiplier).sp.toPx() * settings.speedMaxLines.coerceAtLeast(1)
         }
@@ -761,15 +784,21 @@ private fun SpeedViewport(
             SpeedLowerSegmentMode.CONTEXT -> persistentOffset
         }
 
+        val pinnedRsvp = settings.speedMode == SpeedMode.RSVP && state.chunk?.tokens?.size == 1
+        var measuredFocusFraction by remember(state.chunk, settings.speedMode, settings.speedTextWidthFraction,
+            settings.speedFontSizeSp, settings.speedMaxLines) { mutableStateOf<Float?>(null) }
+        val guideFraction = if (pinnedRsvp) SpeedViewportGeometry.clampHorizontalFocusFraction(settings.speedHorizontalFocusFraction)
+            else measuredFocusFraction ?: .5f
         if (settings.speedShowGuide && state.chunk != null && state.error == null && state.activeMedia == null && !introVisible) {
             SpeedFocusGuide(
                 settings = settings,
                 guideColor = guideColor,
                 focusPosition = effectiveVerticalPosition,
-                horizontalFocusPosition = settings.speedHorizontalFocusFraction,
+                horizontalFocusPosition = guideFraction,
                 mainHalfHeightPx = mainHalfHeightPx,
-                lowerContentReservePx = lowerContentReservePx,
-                hasSpeakerLabel = settings.speedDialogueEnabled && (settings.speedDialogueNames || settings.speedDialogueIndicator),
+                upperRoomDp = if (speakerReservePx > 0f && !speakerBelow) settings.speedSpeakerGapDp else 160f,
+                lowerRoomDp = if (speakerReservePx > 0f && speakerBelow) settings.speedSpeakerGapDp
+                    else if (lowerContentReservePx > 0f) 22f else 160f,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -838,6 +867,11 @@ private fun SpeedViewport(
                     }
                 }
                 SpeedChunkText(
+                    onFocusFraction = { local ->
+                        val width = if (settings.speedMode == SpeedMode.RSVP) 1f else settings.speedTextWidthFraction
+                        measuredFocusFraction = (1f - width) / 2f + width * local
+                    },
+                    speechColoring = speechColoring, speakerColor = speakerColor,
                     state = state,
                     settings = settings,
                     textColor = textColor,
@@ -852,6 +886,7 @@ private fun SpeedViewport(
                 )
                 if (settings.speedLowerSegmentMode != SpeedLowerSegmentMode.OFF) {
                     PersistentSpeedSegment(
+                        speechColoring = speechColoring, speakerColor = speakerColor,
                         chapterText = state.chapterText,
                         chunk = chunk,
                         mode = settings.speedLowerSegmentMode,
@@ -866,6 +901,7 @@ private fun SpeedViewport(
                 }
                 if (!state.playing && settings.speedShowPausePreview) {
                     SpeedPausePreview(
+                        speechColoring = speechColoring, speakerColor = speakerColor,
                         chapterText = state.chapterText,
                         chunk = chunk,
                         settings = settings,
@@ -1012,6 +1048,8 @@ private fun SpeedChapterIntro(
 
 @Composable
 private fun SpeedPausePreview(
+    speechColoring: DialogueTextColoring?,
+    speakerColor: (String) -> Color,
     chapterText: String,
     chunk: io.fluxreader.app.reader.SpeedChunk,
     settings: ReaderSettings,
@@ -1027,8 +1065,8 @@ private fun SpeedPausePreview(
     if (window.text.isBlank()) return
     val localStart = (chunk.startOffset - window.startOffset).coerceIn(0, window.text.length)
     val localEnd = (chunk.endOffset - window.startOffset).coerceIn(localStart, window.text.length)
-    val annotated = remember(window.text, localStart, localEnd, focusColor) {
-        buildAnnotatedString {
+    val annotated = run {
+        val base = buildAnnotatedString {
             append(window.text)
             if (localStart < localEnd) {
                 addStyle(
@@ -1038,6 +1076,8 @@ private fun SpeedPausePreview(
                 )
             }
         }
+        colorSpeedSpeech(base, speechColoring?.segments(window.startOffset, window.startOffset + window.text.length)
+            .orEmpty().mapNotNull { run -> run.speaker?.let { SpeechColorRun(run.start, run.endExclusive, speakerColor(it)) } })
     }
     Surface(
         modifier = modifier,
@@ -1073,49 +1113,9 @@ private fun SpeedPausePreview(
 }
 
 @Composable
-private fun SpeedFocusGuide(
-    settings: ReaderSettings,
-    guideColor: Color,
-    focusPosition: Float,
-    horizontalFocusPosition: Float,
-    mainHalfHeightPx: Float,
-    lowerContentReservePx: Float,
-    hasSpeakerLabel: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier) {
-        val centerX = SpeedViewportGeometry.horizontalFocusPx(size.width, horizontalFocusPosition)
-        val centerY = size.height * focusPosition
-        val halfHeight = min(size.height * settings.speedGuideHeightFraction / 2f, 90.dp.toPx())
-        val clearance = 20.dp.toPx()
-        val stroke = settings.speedGuideWidthDp.dp.toPx()
-        val top = (centerY - halfHeight).coerceAtLeast(0f)
-        val bottom = (centerY + halfHeight).coerceAtMost(size.height)
-        // Rails never enter the fixation block or the persistent lower/context area. Their center
-        // follows the clamped fixation position, so large fonts and accessibility font scaling do
-        // not let guide lines collide with readable text.
-        val gapTop = (centerY - mainHalfHeightPx - clearance).coerceAtLeast(top)
-        val gapBottom = (centerY + mainHalfHeightPx + clearance + lowerContentReservePx).coerceAtMost(bottom)
-        if (gapTop > top && !(hasSpeakerLabel && settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE)) {
-            drawLine(guideColor, Offset(centerX, top), Offset(centerX, gapTop), strokeWidth = stroke)
-        }
-        if (bottom > gapBottom) {
-            drawLine(guideColor, Offset(centerX, gapBottom), Offset(centerX, bottom), strokeWidth = stroke)
-        }
-        if (settings.speedShowFocusTicks) {
-            val tick = 8.dp.toPx()
-            if (gapTop > top && !(hasSpeakerLabel && settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE)) {
-                drawLine(guideColor, Offset(centerX - tick, gapTop), Offset(centerX + tick, gapTop), strokeWidth = stroke)
-            }
-            if (bottom > gapBottom) {
-                drawLine(guideColor, Offset(centerX - tick, gapBottom), Offset(centerX + tick, gapBottom), strokeWidth = stroke)
-            }
-        }
-    }
-}
-
-@Composable
 private fun PersistentSpeedSegment(
+    speechColoring: DialogueTextColoring?,
+    speakerColor: (String) -> Color,
     chapterText: String,
     chunk: io.fluxreader.app.reader.SpeedChunk,
     mode: SpeedLowerSegmentMode,
@@ -1125,11 +1125,15 @@ private fun PersistentSpeedSegment(
     modifier: Modifier = Modifier,
 ) {
     val segmentSize = (fontSizeSp * 0.28f).coerceIn(13f, 20f).sp
+    val coloredChunk = colorSpeedSpeech(AnnotatedString(chunk.tokens.joinToString(" ")),
+        speechColoring?.segments(chunk).orEmpty().mapNotNull { run ->
+            run.speaker?.let { SpeechColorRun(run.start, run.endExclusive, speakerColor(it)) }
+        })
     when (mode) {
         SpeedLowerSegmentMode.OFF -> Unit
         SpeedLowerSegmentMode.CURRENT -> {
             Text(
-                text = chunk.tokens.joinToString(" "),
+                text = coloredChunk,
                 color = textColor.copy(alpha = 0.72f),
                 fontSize = segmentSize,
                 lineHeight = (segmentSize.value * 1.25f).sp,
@@ -1148,7 +1152,7 @@ private fun PersistentSpeedSegment(
                     withStyle(SpanStyle(color = textColor.copy(alpha = 0.30f))) { append("…${context.before}  ") }
                 }
                 withStyle(SpanStyle(color = focusColor.copy(alpha = 0.92f), fontWeight = FontWeight.SemiBold)) {
-                    append(chunk.tokens.joinToString(" "))
+                    append(coloredChunk)
                 }
                 if (context.after.isNotBlank()) {
                     withStyle(SpanStyle(color = textColor.copy(alpha = 0.30f))) { append("  ${context.after}…") }
@@ -1361,6 +1365,9 @@ private fun SpeedProgress(
 
 @Composable
 private fun SpeedChunkText(
+    onFocusFraction: (Float) -> Unit,
+    speechColoring: DialogueTextColoring?,
+    speakerColor: (String) -> Color,
     state: SpeedUiState,
     settings: ReaderSettings,
     textColor: Color,
@@ -1368,10 +1375,14 @@ private fun SpeedChunkText(
     modifier: Modifier = Modifier,
 ) {
     val chunk = state.chunk ?: return
+    val speechRuns = speechColoring?.segments(chunk).orEmpty().mapNotNull { run ->
+        run.speaker?.let { SpeechColorRun(run.start, run.endExclusive, speakerColor(it)) }
+    }
     val family = resolveReaderFontFamily(settings.speedFontMode, settings.customFontPath)
     val weight = speedFontWeight(settings.speedFontWeight)
     if (settings.speedMode == SpeedMode.RSVP && chunk.tokens.size == 1) {
         RsvpWord(
+            speechRuns = speechRuns, speechColoring = speechColoring, speakerColor = speakerColor,
             token = chunk.tokens.first(),
             chapterText = state.chapterText,
             chunkEndOffset = chunk.endOffset,
@@ -1385,8 +1396,13 @@ private fun SpeedChunkText(
         return
     }
 
-    val annotated = buildSpeedAnnotatedText(chunk.tokens, chunk.focusTokenIndex, settings, textColor, focusColor)
+    val focusOffset = chunk.focusTokenIndex.takeIf { it in chunk.tokens.indices }?.let { tokenIndex ->
+        chunk.tokens.take(tokenIndex).sumOf { it.length + 1 } + SpeedReaderCursor.focusCharacterIndex(chunk.tokens[tokenIndex])
+    }
+    val annotated = colorSpeedSpeech(buildSpeedAnnotatedText(chunk.tokens, chunk.focusTokenIndex, settings, textColor, focusColor),
+        speechRuns, focusOffset.takeIf { settings.speedFocusStyle == SpeedFocusStyle.CHARACTER })
     FittedSpeedText(
+        focusOffset = focusOffset, onFocusFraction = onFocusFraction,
         text = annotated,
         settings = settings,
         textColor = textColor,
@@ -1398,6 +1414,9 @@ private fun SpeedChunkText(
 
 @Composable
 private fun RsvpWord(
+    speechRuns: List<SpeechColorRun>,
+    speechColoring: DialogueTextColoring?,
+    speakerColor: (String) -> Color,
     token: String,
     chapterText: String,
     chunkEndOffset: Int,
@@ -1428,7 +1447,7 @@ private fun RsvpWord(
             }
         }
 
-        val baseText = focusedWord()
+        val baseText = colorSpeedSpeech(focusedWord(), speechRuns, focus.takeIf { settings.speedFocusStyle == SpeedFocusStyle.CHARACTER })
         val baseStyle = TextStyle(
             color = textColor,
             fontFamily = family,
@@ -1494,13 +1513,17 @@ private fun RsvpWord(
                 val gapPx = with(density) { 14.dp.toPx() }
                 val nextLeftPx = currentLeftPx + finalLayout.size.width + gapPx
                 val nextWord = following.first()
-                val previewStyle = finalStyle.copy(color = textColor.copy(alpha = settings.speedContextOpacity))
+                val nextOffset = if (settings.speedDialogueEnabled) SpeedDialoguePlayback.readableOffset(chapterText, chunkEndOffset) else chunkEndOffset
+                val nextChunk = SpeedReaderCursor.next(chapterText, nextOffset, 1)
+                val nextSpeaker = nextChunk?.let { speechColoring?.segments(it)?.firstOrNull { run -> run.speaker != null }?.speaker }
+                val peripheralColor = nextSpeaker?.let(speakerColor) ?: textColor
+                val previewStyle = finalStyle.copy(color = peripheralColor.copy(alpha = settings.speedContextOpacity))
                 val previewWidthPx = measurer.measure(nextWord, style = previewStyle,
                     maxLines = 1, softWrap = false).size.width
                 if (nextLeftPx >= 0f && nextLeftPx + previewWidthPx + gapPx < maxWidthPx) {
                     Text(
                         text = nextWord,
-                        color = textColor.copy(alpha = settings.speedContextOpacity * 0.72f),
+                        color = peripheralColor.copy(alpha = settings.speedContextOpacity * 0.72f),
                         fontSize = finalSizeSp.sp,
                         fontFamily = family, fontWeight = weight, letterSpacing = letterSpacing,
                         maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
@@ -1542,6 +1565,8 @@ private fun buildSpeedAnnotatedText(
 
 @Composable
 private fun FittedSpeedText(
+    focusOffset: Int?,
+    onFocusFraction: (Float) -> Unit,
     text: AnnotatedString,
     settings: ReaderSettings,
     textColor: Color,
@@ -1585,6 +1610,11 @@ private fun FittedSpeedText(
             softWrap = maxLines > 1,
             overflow = TextOverflow.Clip,
             modifier = Modifier.fillMaxWidth(),
+            onTextLayout = { layout ->
+                val position = focusOffset?.takeIf { it in text.text.indices }
+                onFocusFraction(if (position == null || layout.size.width == 0) .5f
+                    else layout.getBoundingBox(position).center.x / layout.size.width)
+            },
         )
     }
 }
@@ -1924,6 +1954,9 @@ private fun SpeedDisplaySheet(
                 subtitle = "Точка фиксации взгляда.",
                 checked = settings.speedShowGuide,
             ) { enabled -> viewModel.updateSettings { it.copy(speedShowGuide = enabled) } }
+            if (settings.speedShowGuide) {
+                SpeedGuideChoices(settings, viewModel::updateSettings)
+            }
             SettingsToggleRow(
                 title = "Следующие слова",
                 subtitle = "",
@@ -2085,7 +2118,10 @@ private fun SpeedAdvancedSheet(
                 SettingsValueSlider("Конец предложения", settings.speedSentencePauseMs.toFloat(), 0f..700f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedSentencePauseMs = value.toInt()) } }
                 SettingsValueSlider("Запятая / ; / :", settings.speedClausePauseMs.toFloat(), 0f..350f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedClausePauseMs = value.toInt()) } }
                 SettingsValueSlider("Абзац", settings.speedParagraphPauseMs.toFloat(), 0f..1200f, { "${it.toInt()} мс" }) { value -> viewModel.updateSettings { it.copy(speedParagraphPauseMs = value.toInt()) } }
-                SettingsValueSlider("Замедление длинных слов", settings.speedLongWordSlowdownPercent.toFloat(), 0f..60f, { "${it.toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedLongWordSlowdownPercent = value.toInt()) } }
+            }
+            if (settings.speedPacingMode != SpeedPacingMode.CONSTANT) {
+                SettingsValueSlider("Замедление длинных слов", settings.speedLongWordSlowdownPercent.toFloat(), 0f..60f,
+                    { "${it.toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedLongWordSlowdownPercent = value.toInt()) } }
             }
             SettingsToggleRow(
                 title = "Плавный разгон",
@@ -2136,20 +2172,23 @@ private fun SpeedAdvancedSheet(
 
             if (settings.speedShowGuide) {
                 Text("Направляющая", style = MaterialTheme.typography.titleMedium)
-                SettingsToggleRow(
+                SpeedGuideChoices(settings, viewModel::updateSettings)
+                if (settings.speedGuideStyle == io.fluxreader.app.data.SpeedGuideStyle.RAIL) SettingsToggleRow(
                     title = "Поперечные метки",
                     subtitle = "",
                     checked = settings.speedShowFocusTicks,
                 ) { enabled -> viewModel.updateSettings { it.copy(speedShowFocusTicks = enabled) } }
-                SettingsValueSlider("Высота", settings.speedGuideHeightFraction, 0.15f..0.80f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedGuideHeightFraction = value) } }
+                if (settings.speedGuideStyle == io.fluxreader.app.data.SpeedGuideStyle.RAIL) SettingsValueSlider("Длина линии", settings.speedGuideHeightFraction, 0.15f..0.80f, { "${(it * 100).toInt()}%" }) { value -> viewModel.updateSettings { it.copy(speedGuideHeightFraction = value) } }
                 SettingsValueSlider("Толщина", settings.speedGuideWidthDp, 0.5f..4f, { String.format("%.1f dp", it) }) { value -> viewModel.updateSettings { it.copy(speedGuideWidthDp = value) } }
             }
 
+            if (!settings.speedUseReaderTheme && !settings.useWastelandDesign && !settings.useCyberpunkDesign) {
             Text("Цвета", style = MaterialTheme.typography.titleMedium)
             RgbEditor("Текст", settings.speedTextColorArgb) { color -> viewModel.updateSettings { it.copy(speedTextColorArgb = color) } }
             RgbEditor("Фокус", settings.speedFocusColorArgb) { color -> viewModel.updateSettings { it.copy(speedFocusColorArgb = color) } }
             RgbEditor("Фон", settings.speedBackgroundColorArgb) { color -> viewModel.updateSettings { it.copy(speedBackgroundColorArgb = color) } }
             RgbEditor("Направляющая", settings.speedGuideColorArgb) { color -> viewModel.updateSettings { it.copy(speedGuideColorArgb = color) } }
+            }
         }
     }
 }

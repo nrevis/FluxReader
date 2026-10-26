@@ -60,6 +60,11 @@ internal fun SpeedDialogueSettings(
                 subtitle = "",
                 checked = settings.speedDialogueNames,
             ) { value -> onUpdate { it.copy(speedDialogueNames = value) } }
+            SettingsToggleRow(
+                title = "Цвет реплики как у имени",
+                subtitle = "",
+                checked = settings.speedDialogueTextColor,
+            ) { value -> onUpdate { it.copy(speedDialogueTextColor = value) } }
             if (settings.speedDialogueNames || settings.speedDialogueIndicator) {
                 Text("Оформление имени", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -73,7 +78,7 @@ internal fun SpeedDialogueSettings(
                             SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = previewBackground, accent = previewAccent, namedSpeaker = settings.speedDialogueNames)
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
                         }
-                        Text("Добрый вечер!", style = MaterialTheme.typography.titleLarge, color = previewText)
+                        Text("Добрый вечер!", style = MaterialTheme.typography.titleLarge, color = if (settings.speedDialogueTextColor) speedSpeakerColor("Анна Соколова", true, settings, previewBackground, previewAccent) else previewText)
                         if (settings.speedSpeakerPosition == SpeedSpeakerPosition.BELOW) {
                             Spacer(Modifier.height(settings.speedSpeakerGapDp.dp))
                             SpeedSpeakerLabel(if (settings.speedDialogueNames) "Анна Соколова" else "Прямая речь", settings, background = previewBackground, accent = previewAccent, namedSpeaker = settings.speedDialogueNames)

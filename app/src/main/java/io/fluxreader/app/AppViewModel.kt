@@ -48,6 +48,7 @@ import io.fluxreader.app.reader.SpeedChunk
 import io.fluxreader.app.reader.SpeedHeadingCue
 import io.fluxreader.app.reader.SpeedMediaCue
 import io.fluxreader.app.reader.SpeedDialoguePlayback
+import io.fluxreader.app.reader.SpeedPlaybackAdvancePolicy
 import io.fluxreader.app.reader.SpeedDialogueAnalyzer
 import io.fluxreader.app.reader.SpeedReaderCursor
 import io.fluxreader.app.reader.SearchEngine
@@ -1547,8 +1548,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun speedAdvance() {
+    fun speedAdvance(expectedBookId: String?, expectedChapterIndex: Int, expectedStartOffset: Int, expectedEndOffset: Int) {
         val state = _speed.value
+        if (!SpeedPlaybackAdvancePolicy.accepts(
+                routeActive = _route.value == AppRoute.SPEED,
+                playing = state.playing,
+                loading = state.loading,
+                blocked = state.error != null || state.activeMedia != null,
+                currentBookId = state.bookId,
+                currentChapterIndex = state.chapterIndex,
+                currentChunk = state.chunk,
+                expectedBookId = expectedBookId,
+                expectedChapterIndex = expectedChapterIndex,
+                expectedStartOffset = expectedStartOffset,
+                expectedEndOffset = expectedEndOffset,
+            )) return
         val chunk = state.chunk ?: return
         val outline = state.outline ?: return
         val config = settings.value

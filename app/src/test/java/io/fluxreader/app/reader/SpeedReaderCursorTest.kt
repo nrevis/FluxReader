@@ -185,4 +185,94 @@ class SpeedReaderCursorTest {
         assertTrue(SpeedReaderCursor.delayMillis(3000, chunk, "быстро", SpeedPacingMode.CONSTANT) <= 25L)
     }
 
+    @Test fun constantTimingHonorsBothEndsOfTheConfiguredWpmRange() {
+        val text = List(7) { "слово" }.joinToString(" ")
+        val phrase = requireNotNull(SpeedReaderCursor.next(text, 0, 7))
+        assertEquals(4_200L, SpeedReaderCursor.delayMillis(100, phrase, text, SpeedPacingMode.CONSTANT))
+        val word = requireNotNull(SpeedReaderCursor.next(text, 0, 1))
+        assertEquals(20L, SpeedReaderCursor.delayMillis(3000, word, text, SpeedPacingMode.CONSTANT))
+    }
+
+    @Test fun complexWordSlowdownIsNotClippedForLongPhrasesAtLowSpeed() {
+        val text = List(7) { "электромагнитный" }.joinToString(" ")
+        val phrase = requireNotNull(SpeedReaderCursor.next(text, 0, 7))
+        fun delay(percent: Int, mode: SpeedPacingMode) = SpeedReaderCursor.delayMillis(
+            100, phrase, text, mode, paragraphPause = false, microPausesEnabled = false,
+            longWordSlowdownPercent = percent,
+        )
+        assertEquals(4_200L, delay(0, SpeedPacingMode.SMART))
+        assertTrue(delay(30, SpeedPacingMode.SMART) > delay(0, SpeedPacingMode.SMART))
+        assertTrue(delay(60, SpeedPacingMode.SMART) > delay(30, SpeedPacingMode.SMART))
+        assertTrue(delay(60, SpeedPacingMode.DEEP) > delay(60, SpeedPacingMode.SMART))
+        assertTrue(delay(60, SpeedPacingMode.DEEP) > 7_000L)
+    }
+
+    @Test fun aComplexWordStillReceivesExtraTimeAtThreeThousandWpm() {
+        val word = requireNotNull(SpeedReaderCursor.next("электромагнитный", 0, 1))
+        val plain = SpeedReaderCursor.delayMillis(3000, word, pacingMode = SpeedPacingMode.SMART,
+            paragraphPause = false, microPausesEnabled = false, longWordSlowdownPercent = 0)
+        val slower = SpeedReaderCursor.delayMillis(3000, word, pacingMode = SpeedPacingMode.SMART,
+            paragraphPause = false, microPausesEnabled = false, longWordSlowdownPercent = 18)
+        assertTrue(slower > plain)
+    }
+
+    @Test fun adaptiveTwoWordFixationCanIsolateOneComplexWord() {
+        val text = "электромагнитный протокол готов"
+        val chunk = requireNotNull(SpeedReaderCursor.next(text, 0, 2,
+            adaptiveWordCount = true, pacingMode = SpeedPacingMode.SMART))
+        assertEquals(listOf("электромагнитный"), chunk.tokens)
+        assertEquals(listOf("протокол"), SpeedReaderCursor.next(text, chunk.endOffset, 1)?.tokens)
+    }
+
+    @Test fun aDanglingConnectorNeverPullsTheNextParagraphIntoTheFixation() {
+        val text = "Он думал о\n\u00a0\nбудущем."
+        val chunk = requireNotNull(SpeedReaderCursor.next(text, 0, 3, smartChunking = true))
+        assertEquals(listOf("Он", "думал", "о"), chunk.tokens)
+        assertTrue(SpeedReaderCursor.hasSemanticPause(chunk, text))
+        assertEquals(listOf("будущем."), SpeedReaderCursor.next(text, chunk.endOffset, 3, smartChunking = true)?.tokens)
+    }
+
+    @Test fun epubNonBreakingSpacesHaveTheSameNavigationAndAdaptiveTokensAsOrdinarySpaces() {
+        val text = "Первое.\u00a0Второе\u202fсодержательное\u00a0предложение!\u202fТретье."
+        val second = text.indexOf("Второе")
+        val third = text.indexOf("Третье")
+        assertEquals(second, SpeedReaderCursor.nextSentenceOffset(text, "Первое.".length))
+        assertEquals(second, SpeedReaderCursor.sentenceStartOffset(text, text.indexOf("содержательное") + 4))
+        assertEquals(second, SpeedReaderCursor.previousSentenceOffset(text, third))
+        val short = "я\u00a0и\u202fты\u00a0мы"
+        assertEquals(listOf("я", "и", "ты"), SpeedReaderCursor.next(short, 0, 2, adaptiveWordCount = true)?.tokens)
+        val paragraphs = "Первый.\r\n\u202f\r\nВторой.\r\n\u00a0\r\nТретий."
+        assertEquals(paragraphs.indexOf("Второй"), SpeedReaderCursor.nextParagraphOffset(paragraphs, 0))
+        assertEquals(paragraphs.indexOf("Второй"), SpeedReaderCursor.previousParagraphOffset(paragraphs, paragraphs.indexOf("Третий")))
+    }
+
+    @Test fun sentenceNavigationNeverTreatsAPartialDecimalAsAFinalPeriod() {
+        val text = "Версия 3.14 готова. Потом проверим."
+        val inside = text.indexOf("3.14") + 2
+        assertEquals(0, SpeedReaderCursor.sentenceStartOffset(text, inside))
+        assertEquals(text.indexOf("Потом"), SpeedReaderCursor.nextSentenceOffset(text, inside))
+        // A preceding completed sentence must not make a seek inside the next word return mid-word.
+        assertNull(SpeedReaderCursor.nextSentenceOffset(text, text.indexOf("Потом") + 2))
+    }
+
+    @Test fun closingBracketsAndAsciiEllipsisKeepTheirSemanticPauses() {
+        for (closing in listOf("]", "}")) {
+            val text = "Всё готово.$closing Следующее предложение."
+            val chunk = requireNotNull(SpeedReaderCursor.next(text, 0, 7, smartChunking = true))
+            assertEquals(listOf("Всё", "готово.$closing"), chunk.tokens)
+            assertTrue(SpeedReaderCursor.hasSemanticPause(chunk, text))
+        }
+        fun delay(word: String): Long {
+            val chunk = requireNotNull(SpeedReaderCursor.next(word, 0, 1))
+            return SpeedReaderCursor.delayMillis(400, chunk, word, paragraphPause = false, adaptiveSentencePause = false)
+        }
+        assertEquals(delay("Пауза…"), delay("Пауза..."))
+    }
+
+    @Test fun focusCharacterAvoidsInternalHyphensFractionsAndCombiningAccents() {
+        for (token in listOf("а-б", "1/2", "а\u0301")) {
+            assertTrue(token, token[SpeedReaderCursor.focusCharacterIndex(token)].isLetterOrDigit())
+        }
+    }
+
 }

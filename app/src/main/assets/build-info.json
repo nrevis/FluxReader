@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.105",
-  "versionCode": 20122,
+  "versionName": "0.2.0-alpha.106",
+  "versionCode": 20123,
   "line": "0.2-clean-rewrite",
-  "focus": "automatic-chapter-dialogue-rules-and-scene-boundaries"
+  "focus": "speaker-colored-speech-speed-guides-and-playback-fixes"
 }

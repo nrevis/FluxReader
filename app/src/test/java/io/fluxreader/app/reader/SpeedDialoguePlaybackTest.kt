@@ -135,4 +135,31 @@ class SpeedDialoguePlaybackTest {
         org.junit.Assert.assertEquals(text.indexOf("ответил"), author.startOffset)
     }
 
+    @Test fun switchingFixationModesPreservesWordsAndOffsetsAcrossSpeechAndNarration() {
+        val text = "Начало\u00a0обычного текста.\n\n— $rapidSpeech — сказала Анна. — Всё готово!\n\nКонец главы."
+        val configurations = listOf(
+            enabled.copy(speedMode = io.fluxreader.app.data.SpeedMode.RSVP),
+            enabled.copy(speedMode = io.fluxreader.app.data.SpeedMode.PHRASE),
+            enabled.copy(speedMode = io.fluxreader.app.data.SpeedMode.FOCUS),
+        )
+        var offset = 0
+        var iteration = 0
+        val observed = mutableListOf<String>()
+        while (true) {
+            val config = configurations[iteration % configurations.size]
+            val wordCount = if (config.speedMode == io.fluxreader.app.data.SpeedMode.RSVP) 1 else 4
+            val chunk = SpeedDialoguePlayback.next(text, offset, config, wordCount) ?: break
+            assertTrue(chunk.startOffset >= offset)
+            assertTrue(chunk.endOffset > offset)
+            observed += chunk.tokens
+            offset = chunk.endOffset
+            iteration++
+            assertTrue(iteration < 100)
+        }
+        val expected = listOf("Начало", "обычного", "текста.") + rapidSpeech.split('-') +
+            listOf("сказала", "Анна.", "Всё", "готово!", "Конец", "главы.")
+        assertEquals(expected, observed)
+        assertEquals(text.length, offset)
+    }
+
 }

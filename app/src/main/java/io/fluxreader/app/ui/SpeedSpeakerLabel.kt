@@ -58,22 +58,14 @@ internal fun SpeedSpeakerLabel(
 ) {
     val themed = LocalFluxThemeMode.current.isExperimentalChrome
     val themePalette = LocalExperimentalColors.current
-    val light = listOf(Color(0xFFB7A3FA), Color(0xFF75D0D1), Color(0xFFFFC18A), Color(0xFFA8D9A0), Color(0xFFEBADD4))
-    val dark = listOf(Color(0xFF5935A2), Color(0xFF00686A), Color(0xFF8B4200), Color(0xFF31652C), Color(0xFF92396D))
-    val palette = if (background.luminance() < .35f) light else dark
     val individual = speakerNameTint(speaker, namedSpeaker, settings.speedSpeakerColor, characterColor)
-    val chosen = individual?.let { speakerTintColor(it, background) } ?: when (if (namedSpeaker) settings.speedSpeakerColor else SpeedSpeakerColor.THEME) {
-        SpeedSpeakerColor.THEME, SpeedSpeakerColor.CHARACTER -> accent
-        SpeedSpeakerColor.BLUE -> if (background.luminance() < .35f) Color(0xFF9CCAFF) else Color(0xFF1D5599)
-        SpeedSpeakerColor.GREEN -> palette[3]
-        SpeedSpeakerColor.AMBER -> palette[2]
-        SpeedSpeakerColor.ROSE -> palette[4]
-        SpeedSpeakerColor.VIOLET -> palette[0]
-    }
+    val chosen = speedSpeakerColor(speaker, namedSpeaker, settings, background, accent, characterColor)
     val frameColor = if (themed && individual == null) themePalette.accent else chosen
     val fill = if (themed) frameColor.copy(alpha = settings.speedSpeakerBackgroundAlpha * .5f).compositeOver(themePalette.panel)
         else chosen.copy(alpha = settings.speedSpeakerBackgroundAlpha).compositeOver(background)
-    val text = speakerLabelTextColor(chosen, background, fill, settings.speedSpeakerStyle)
+    val text = if (namedSpeaker && settings.speedDialogueTextColor) speedSpeakerReadingInk(speaker, settings, background, accent,
+        characterColor, themePalette.panel.takeIf { themed })
+        else speakerLabelTextColor(chosen, background, fill, settings.speedSpeakerStyle)
     val bubble = settings.speedSpeakerStyle == SpeedSpeakerStyle.BUBBLE
     val above = settings.speedSpeakerPosition == SpeedSpeakerPosition.ABOVE
     val bodyShape = if (themed) MaterialTheme.shapes.large else RoundedCornerShape(if (bubble) 18.dp else 50.dp)
@@ -97,6 +89,37 @@ internal fun SpeedSpeakerLabel(
                 bottom = if (bubble && above) 8.dp else 0.dp)) { label() }
         }
     }
+}
+
+/** Shared by names and speech text, including per-book overrides and light/dark contrast. */
+internal fun speedSpeakerColor(name: String, named: Boolean, settings: ReaderSettings,
+    background: Color, accent: Color, entry: SpeakerColorEntry? = null): Color {
+    val individual = speakerNameTint(name, named, settings.speedSpeakerColor, entry)
+    val dark = background.luminance() < .35f
+    return individual?.let { speakerTintColor(it, background) } ?: when (if (named) settings.speedSpeakerColor else SpeedSpeakerColor.THEME) {
+        SpeedSpeakerColor.THEME, SpeedSpeakerColor.CHARACTER -> accent
+        SpeedSpeakerColor.BLUE -> if (dark) Color(0xFF9CCAFF) else Color(0xFF1D5599)
+        SpeedSpeakerColor.GREEN -> if (dark) Color(0xFFA8D9A0) else Color(0xFF31652C)
+        SpeedSpeakerColor.AMBER -> if (dark) Color(0xFFFFC18A) else Color(0xFF8B4200)
+        SpeedSpeakerColor.ROSE -> if (dark) Color(0xFFEBADD4) else Color(0xFF92396D)
+        SpeedSpeakerColor.VIOLET -> if (dark) Color(0xFFB7A3FA) else Color(0xFF5935A2)
+    }
+}
+
+/** A colored reply and its label share one ink, readable on both the page and label fill. */
+internal fun speedSpeakerReadingInk(name: String, settings: ReaderSettings, background: Color, accent: Color,
+    entry: SpeakerColorEntry? = null, themedPanel: Color? = null): Color {
+    val chosen = speedSpeakerColor(name, true, settings, background, accent, entry)
+    val individual = speakerNameTint(name, true, settings.speedSpeakerColor, entry)
+    val frame = if (themedPanel != null && individual == null) accent else chosen
+    val fill = if (settings.speedSpeakerStyle == SpeedSpeakerStyle.TEXT) background
+        else if (themedPanel != null) frame.copy(alpha = settings.speedSpeakerBackgroundAlpha * .5f).compositeOver(themedPanel)
+        else chosen.copy(alpha = settings.speedSpeakerBackgroundAlpha).compositeOver(background)
+    fun contrast(color: Color, surface: Color) = (maxOf(color.luminance(), surface.luminance()) + .05f) /
+        (minOf(color.luminance(), surface.luminance()) + .05f)
+    fun minimumContrast(color: Color) = minOf(contrast(color, background), contrast(color, fill))
+    return if (minimumContrast(chosen) >= 4.5f) chosen
+        else if (minimumContrast(Color.Black) > minimumContrast(Color.White)) Color.Black else Color.White
 }
 
 internal fun speakerNameTint(name: String, namedSpeaker: Boolean, mode: SpeedSpeakerColor, entry: SpeakerColorEntry?): SpeakerTint? {

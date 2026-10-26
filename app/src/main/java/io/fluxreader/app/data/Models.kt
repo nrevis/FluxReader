@@ -33,6 +33,7 @@ enum class SpeedSpeakerStyle { TEXT, CHIP, BUBBLE }
 enum class SpeedSpeakerPosition { ABOVE, BELOW }
 enum class SpeedSpeakerColor { CHARACTER, THEME, BLUE, GREEN, AMBER, ROSE, VIOLET }
 enum class SpeedFocusStyle { CHARACTER, WORD }
+enum class SpeedGuideStyle { TICKS, RAIL, BRACKETS }
 enum class SpeedPacingMode { CONSTANT, SMART, DEEP }
 enum class SpeedLowerSegmentMode { OFF, CURRENT, CONTEXT }
 enum class SpeedProgressMode { CHAPTER, BOOK, BOTH }
@@ -155,6 +156,7 @@ data class ReaderSettings(
     val speedDialogueNames: Boolean = true,
     val speedDialogueBookAnalysis: Boolean = false,
     val speedDialogueIndicator: Boolean = true,
+    val speedDialogueTextColor: Boolean = false,
     val speedSpeakerStyle: SpeedSpeakerStyle = SpeedSpeakerStyle.BUBBLE,
     val speedSpeakerPosition: SpeedSpeakerPosition = SpeedSpeakerPosition.ABOVE,
     val speedSpeakerColor: SpeedSpeakerColor = SpeedSpeakerColor.THEME,
@@ -211,6 +213,7 @@ data class ReaderSettings(
     val speedFocusStyle: SpeedFocusStyle = SpeedFocusStyle.CHARACTER,
     val speedContextOpacity: Float = 0.45f,
     val speedShowGuide: Boolean = true,
+    val speedGuideStyle: SpeedGuideStyle = SpeedGuideStyle.TICKS,
     val speedShowFocusTicks: Boolean = true,
     val speedGuideHeightFraction: Float = 0.40f,
     val speedGuideWidthDp: Float = 1f,

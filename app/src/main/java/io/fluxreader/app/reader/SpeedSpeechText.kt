@@ -8,7 +8,7 @@ object SpeedSpeechText {
 
     /** Offline neural voices have phrase boundaries, not measured word timestamps. */
     fun displayChunk(piece: Piece): SpeedChunk = SpeedChunk(
-        piece.text.split(Regex("\\s+")).filter { it.isNotBlank() }, piece.start, piece.end, -1)
+        piece.text.split(Regex("[\\s\\p{Zs}\\p{Zl}\\p{Zp}\\u001C-\\u001F]+")).filter { it.isNotBlank() }, piece.start, piece.end, -1)
 
     fun next(text: String, from: Int, limit: Int = LIMIT): Piece? {
         var start = from.coerceIn(0, text.length)
