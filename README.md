@@ -8,13 +8,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.109/FluxReader-0.2.0-alpha.109-release.apk"><strong>Скачать APK</strong></a> ·
-  <a href="https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.109">Что нового</a> ·
-  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.109/FluxReader-0.2.0-alpha.109-clean.zip">Исходники</a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.110/FluxReader-0.2.0-alpha.110-release.apk"><strong>Скачать APK</strong></a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/tag/v0.2.0-alpha.110">Что нового</a> ·
+  <a href="https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.110/FluxReader-0.2.0-alpha.110-clean.zip">Исходники</a> ·
   <a href="docs/USER-GUIDE.md">Руководство</a>
 </p>
 
-<p align="center"><sub>Android 9+ · alpha.109 · Автор: n.revis</sub></p>
+<p align="center"><sub>Android 9+ · alpha.110 · Автор: n.revis</sub></p>
 
 ## Три способа читать
 
@@ -51,7 +51,7 @@
 
 ## Установка
 
-1. Скачайте **[APK alpha.109](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.109/FluxReader-0.2.0-alpha.109-release.apk)** и разрешите установку из выбранного источника в Android.
+1. Скачайте **[APK alpha.110](https://github.com/nrevis/FluxReader/releases/download/v0.2.0-alpha.110/FluxReader-0.2.0-alpha.110-release.apk)** и разрешите установку из выбранного источника в Android.
 2. Добавьте книгу через **«Добавить»** в библиотеке.
 3. Для встроенной озвучки откройте **«Голос и озвучка → Встроенные → Скачать голоса»**.
 
@@ -67,6 +67,10 @@
 - Сетевые голоса Android могут передавать текст своему сервису. Встроенная озвучка обрабатывает текст на устройстве.
 
 </details>
+
+## Поддержать разработку
+
+**Flux Reader и все его функции остаются бесплатными.** Если приложение вам пригодилось, можно [поддержать разработку на Boosty](https://boosty.to/arevis). Это помогает оплачивать инструменты разработки, программы и подписки на нейросети. [Подробнее о поддержке](docs/SUPPORT.md).
 
 ## Подробнее
 

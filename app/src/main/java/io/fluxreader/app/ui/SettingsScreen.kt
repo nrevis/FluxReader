@@ -53,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import io.fluxreader.app.AppViewModel
@@ -448,6 +450,8 @@ private fun OcrSettings(settings: ReaderSettings, viewModel: AppViewModel) {
 
 @Composable
 private fun AboutSettings(viewModel: AppViewModel) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     SectionTitle(Icons.Default.Info, FluxIconRole.ABOUT, "О программе")
     Text("Flux Reader", style = MaterialTheme.typography.headlineSmall)
     Text(
@@ -459,6 +463,18 @@ private fun AboutSettings(viewModel: AppViewModel) {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    HorizontalDivider()
+    Text("Поддержать разработку", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Все функции бесплатны. Поддержка — по желанию.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedButton(onClick = {
+        runCatching { uriHandler.openUri("https://boosty.to/arevis") }.onFailure {
+            android.widget.Toast.makeText(context, "Не удалось открыть Boosty в браузере", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }) { Text("Поддержать на Boosty") }
     HorizontalDivider()
     GitHubUpdateControls(viewModel)
     HorizontalDivider()
