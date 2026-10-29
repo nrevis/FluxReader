@@ -83,6 +83,27 @@ class LibraryImportDestinationTest {
         assertTrue(LibraryFolderTree.directBooks(repository.books.value, "").isEmpty())
     }
 
+    @Test fun groupedFolderCopyMoveAndRemovalPreserveBooksAndNestedPaths() = runBlocking {
+        val context = isolatedContext()
+        val repository = LibraryRepository(context)
+        listOf("Один", "Два").forEachIndexed { index, name ->
+            val file = File(context.cacheDir, "$name.txt").apply { writeText("Разная книга $index. Тихо шелестели листья.") }
+            repository.importSource(contentUri(file), "Сборник/$name/Вложенная")
+        }
+        repository.createFolder("", "Назначение")
+        val originalIds = repository.books.value.map { it.id }.toSet()
+        val paths = setOf("Сборник/Один", "Сборник/Два")
+        paths.forEach { repository.copyFolder(it, "Назначение") }
+        assertEquals(originalIds, repository.books.value.map { it.id }.toSet())
+        assertEquals(2, File(context.filesDir, "books").listFiles()!!.size)
+        paths.forEach { repository.moveFolder(it, "Назначение") }
+        assertTrue(repository.books.value.all { book -> book.folderPaths.all { it.startsWith("Назначение/") } })
+        setOf("Назначение/Один", "Назначение/Два").forEach { repository.deleteFolder(it) }
+        assertEquals(originalIds, repository.books.value.map { it.id }.toSet())
+        assertTrue(repository.books.value.all { "Назначение/Вложенная" in it.folderPaths })
+        assertEquals(2, File(context.filesDir, "books").listFiles()!!.size)
+    }
+
     private fun isolatedContext(): ContextWrapper {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(base.cacheDir, "updates/library-import-tests/${System.nanoTime()}").apply { mkdirs() }

@@ -29,7 +29,7 @@ check('AUDIO excludes textual books', 'WastelandLibraryFilter.AUDIO -> false' in
 check('AUDIO includes only audio entries', '(wastelandFilter == WastelandLibraryFilter.ALL || wastelandFilter == WastelandLibraryFilter.AUDIO)' in ui)
 check('Audio-only folders contribute to navigation', 'folders + audiobooks.entries.map { it.folderPath }' in ui)
 check('Both shell menus open the shared selection actions', ui.count('LibrarySelectionActionsMenu(onClick = { selectionActionsVisible = true })') == 2 and 'createSelectedFolderParent = destinationFolder' in ui)
-check('Selection action requires >0 books', 'if (selectionActionsVisible && selectedBookIds.isNotEmpty()) {' in ui)
+check('Selection action requires books or folders', 'if (selectionActionsVisible && selectedCount > 0) {' in ui and 'val selectedCount = selectedBookIds.size + selectedFolderPaths.size' in ui)
 check('Selection create failure keeps selection', 'if (created != null) {' in ui and 'selectedBookIds = emptySet()' in ui)
 check('Atomic folder-create restores memberships on failure', 'restoreFolderMembership(snapshot)' in app and 'createdPath?.let { created -> runCatching { libraryRepository.deleteFolder(created) } }' in app)
 check('Unified theme list, no duplicated experimental palette list', prefs.count('Text("Цветовая схема"') == 1 and 'val palettes = ReaderThemeMode.entries' in prefs)

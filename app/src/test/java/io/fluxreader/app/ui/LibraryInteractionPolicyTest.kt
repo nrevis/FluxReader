@@ -24,4 +24,16 @@ class LibraryInteractionPolicyTest {
         assertEquals("", LibraryInteractionPolicy.destinationFolder(LibraryGroupMode.NONE, "Книги/Фэнтези"))
         assertEquals("", LibraryInteractionPolicy.destinationFolder(LibraryGroupMode.FOLDER, ""))
     }
+
+    @Test fun selectedSubtreesAreProcessedOnlyOnce() {
+        assertEquals(listOf("Книги", "Аудио"), LibraryInteractionPolicy.topLevelFolders(
+            linkedSetOf(" /Книги/ ", "Книги/Фэнтези", "книги", "Аудио", "")))
+    }
+
+    @Test fun folderTransferExcludesEverySelectedSubtreeButKeepsTheirParent() {
+        assertEquals(listOf("", "Книги", "Другое"), LibraryInteractionPolicy.folderDestinations(
+            listOf("", "Книги", "Книги/Один", "Книги/Один/Вложенная", "Книги/Два", "Другое"),
+            setOf("Книги/Один", "Книги/Два")))
+    }
+
 }

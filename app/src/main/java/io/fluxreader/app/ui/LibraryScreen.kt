@@ -222,6 +222,8 @@ fun LibraryScreen(
     var deleteFolderConfirm by remember { mutableStateOf<String?>(null) }
     var exportingBookId by remember { mutableStateOf<String?>(null) }
     var selectedBookIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedFolderPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val selectedCount = selectedBookIds.size + selectedFolderPaths.size
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectionActionsVisible by remember { mutableStateOf(false) }
     var emptyAreaActionsVisible by remember { mutableStateOf(false) }
@@ -332,10 +334,29 @@ fun LibraryScreen(
         }
         selectable.mapTo(linkedSetOf()) { it.id }
     }
+    val selectableFolderPaths = remember(visibleBooks, knownFolders, currentFolder, query, settings.libraryGroupMode) {
+        if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && query.isBlank()) {
+            LibraryFolderTree.childFolders(visibleBooks, currentFolder, knownFolders).mapTo(linkedSetOf()) { it.path }
+        } else emptySet()
+    }
+    val toggleFolderSelection: (String) -> Unit = { path ->
+        selectedBookIds = emptySet()
+        selectedFolderPaths = if (path in selectedFolderPaths) selectedFolderPaths - path else selectedFolderPaths + path
+        selectionMode = selectedFolderPaths.isNotEmpty()
+    }
+    val manageFolder: (String) -> Unit = { path ->
+        if (selectionMode) {
+            selectedBookIds = emptySet()
+            selectedFolderPaths = selectedFolderPaths + path
+            selectionActionsVisible = true
+        } else managingFolder = path
+    }
     val toggleSelection: (BookRecord) -> Unit = { book ->
+        selectedFolderPaths = emptySet()
         selectedBookIds = if (book.id in selectedBookIds) selectedBookIds - book.id else selectedBookIds + book.id
     }
     val startSelection: (BookRecord) -> Unit = { book ->
+        selectedFolderPaths = emptySet()
         val result = LibraryInteractionPolicy.longPressBook(selectedBookIds, selectionMode, book.id)
         selectedBookIds = result.selectedIds
         selectionActionsVisible = result.showActions
@@ -346,16 +367,18 @@ fun LibraryScreen(
 
     BackHandler(enabled = selectionMode) {
         selectedBookIds = emptySet()
+        selectedFolderPaths = emptySet()
         selectionMode = false
         batchTransferMode = null
         batchDeleteConfirm = false
         selectionActionsVisible = false
     }
 
-    LaunchedEffect(books) {
+    LaunchedEffect(books, knownFolders) {
         val existing = books.mapTo(hashSetOf()) { it.id }
         selectedBookIds = selectedBookIds.filterTo(linkedSetOf()) { it in existing }
-        if (selectionMode && selectedBookIds.isEmpty()) {
+        selectedFolderPaths = selectedFolderPaths.filterTo(linkedSetOf()) { it in knownFolders }
+        if (selectionMode && selectedBookIds.isEmpty() && selectedFolderPaths.isEmpty()) {
             selectionMode = false
             selectionActionsVisible = false
         }
@@ -507,7 +530,9 @@ fun LibraryScreen(
                         onOpen = onOpen,
                         onSpeed = onSpeed,
                         onManageBook = { managingBook = it },
-                        onManageFolder = { managingFolder = it },
+                        onManageFolder = manageFolder,
+                        selectedFolderPaths = selectedFolderPaths,
+                        onToggleFolderSelection = toggleFolderSelection,
                         selectedBookIds = selectedBookIds,
                         selectionMode = selectionMode,
                         onToggleSelection = toggleSelection,
@@ -617,12 +642,12 @@ fun LibraryScreen(
                 .background(LocalExperimentalColors.current.background),
         ) {
             ExperimentalTopBar(
-                title = if (selectionMode) "Выбрано: ${selectedBookIds.size}" else "Библиотека",
-                subtitle = if (selectionMode) "Выбор книг" else "Книг: ${books.size} · ${libraryViewLabel(settings.libraryViewMode)}",
+                title = if (selectionMode) "Выбрано: $selectedCount" else "Библиотека",
+                subtitle = if (selectionMode) { if (selectedFolderPaths.isNotEmpty()) "Выбор папок" else "Выбор книг" } else "Книг: ${books.size} · ${libraryViewLabel(settings.libraryViewMode)}",
                 actions = {
                     if (selectionMode) {
                         LibrarySelectionActionsMenu(onClick = { selectionActionsVisible = true })
-                        IconButton(onClick = { selectedBookIds = emptySet(); selectionMode = false }) {
+                        IconButton(onClick = { selectedBookIds = emptySet(); selectedFolderPaths = emptySet(); selectionMode = false }) {
                             Icon(Icons.Default.Close, contentDescription = "Закончить выделение", tint = LocalFluxThemeMode.current.chromeText)
                         }
                     } else {
@@ -662,6 +687,7 @@ fun LibraryScreen(
                         onFolderChanged("")
                         compactFiltersExpanded = false
                         selectedBookIds = emptySet()
+                        selectedFolderPaths = emptySet()
                         selectionMode = false
                         libraryFocusManager.clearFocus(force = true)
                         libraryKeyboardController?.hide()
@@ -679,7 +705,7 @@ fun LibraryScreen(
                 TopAppBar(
                     title = {
                         if (selectionMode) {
-                            Text("Выбрано: ${selectedBookIds.size}", fontWeight = FontWeight.SemiBold)
+                            Text("Выбрано: $selectedCount", fontWeight = FontWeight.SemiBold)
                         } else {
                             Column {
                                 Text("Библиотека", fontWeight = FontWeight.SemiBold)
@@ -694,7 +720,7 @@ fun LibraryScreen(
                     actions = {
                         if (selectionMode) {
                             LibrarySelectionActionsMenu(onClick = { selectionActionsVisible = true })
-                            IconButton(onClick = { selectedBookIds = emptySet(); selectionMode = false }) {
+                            IconButton(onClick = { selectedBookIds = emptySet(); selectedFolderPaths = emptySet(); selectionMode = false }) {
                                 Icon(Icons.Default.Close, contentDescription = "Закончить выделение")
                             }
                         } else {
@@ -758,7 +784,14 @@ fun LibraryScreen(
             }
             LibraryActionButton(Icons.Default.SelectAll, "Выделить все видимые", enabled = selectableBookIds.isNotEmpty()) {
                 emptyAreaActionsVisible = false
+                selectedFolderPaths = emptySet()
                 selectedBookIds = selectedBookIds + selectableBookIds
+                selectionMode = true
+            }
+            LibraryActionButton(Icons.Default.Folder, "Выделить все папки", enabled = selectableFolderPaths.isNotEmpty()) {
+                emptyAreaActionsVisible = false
+                selectedBookIds = emptySet()
+                selectedFolderPaths = selectableFolderPaths
                 selectionMode = true
             }
             if (canUndoLibraryOperation) {
@@ -770,21 +803,28 @@ fun LibraryScreen(
         }
     }
 
-    if (selectionActionsVisible && selectedBookIds.isNotEmpty()) {
+    if (selectionActionsVisible && selectedCount > 0) {
         fun runSelectionAction(action: () -> Unit) {
             selectionActionsVisible = false
             action()
         }
         LibrarySelectionActionsDialog(
-            selectedCount = selectedBookIds.size,
-            allVisibleSelected = selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds),
+            selectedCount = selectedCount,
+            foldersSelected = selectedFolderPaths.isNotEmpty(),
+            allVisibleSelected = if (selectedFolderPaths.isNotEmpty()) selectedFolderPaths.containsAll(selectableFolderPaths)
+                else selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds),
             onDismiss = { selectionActionsVisible = false },
             onSelectAll = {
                 runSelectionAction {
-                    selectedBookIds = if (selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds)) {
-                        selectedBookIds - selectableBookIds
-                    } else selectedBookIds + selectableBookIds
-                    if (selectedBookIds.isEmpty()) selectionMode = false
+                    if (selectedFolderPaths.isNotEmpty()) {
+                        selectedFolderPaths = if (selectedFolderPaths.containsAll(selectableFolderPaths)) selectedFolderPaths - selectableFolderPaths
+                            else selectedFolderPaths + selectableFolderPaths
+                    } else {
+                        selectedBookIds = if (selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds)) {
+                            selectedBookIds - selectableBookIds
+                        } else selectedBookIds + selectableBookIds
+                    }
+                    if (selectedBookIds.isEmpty() && selectedFolderPaths.isEmpty()) selectionMode = false
                 }
             },
             onCopy = { runSelectionAction { batchTransferMode = TransferMode.COPY } },
@@ -793,11 +833,11 @@ fun LibraryScreen(
             onDelete = { runSelectionAction { batchDeleteConfirm = true } },
             onEditSingle = { runSelectionAction {
                 books.firstOrNull { it.id in selectedBookIds }?.let { editingBook = it }
-                selectedBookIds = emptySet(); selectionMode = false
+                selectedBookIds = emptySet(); selectedFolderPaths = emptySet(); selectionMode = false
             } },
             onManageSingle = { runSelectionAction {
                 books.firstOrNull { it.id in selectedBookIds }?.let { managingBook = it }
-                selectedBookIds = emptySet(); selectionMode = false
+                selectedBookIds = emptySet(); selectedFolderPaths = emptySet(); selectionMode = false
             } },
         )
     }
@@ -880,6 +920,12 @@ fun LibraryScreen(
         FolderActionsDialog(
             folderPath = folderPath,
             onDismiss = { managingFolder = null },
+            onSelect = {
+                managingFolder = null
+                selectedBookIds = emptySet()
+                selectedFolderPaths = setOf(folderPath)
+                selectionMode = true
+            },
             onOpen = {
                 managingFolder = null
                 onFolderChanged(folderPath)
@@ -994,21 +1040,26 @@ fun LibraryScreen(
         } else null
         FolderDestinationDialog(
             title = if (mode == TransferMode.COPY) {
-                "Добавить выбранные (${selectedBookIds.size}) в…"
+                "Добавить выбранные ($selectedCount) в…"
             } else {
-                "Переместить выбранные (${selectedBookIds.size}) в…"
+                "Переместить выбранные ($selectedCount) в…"
             },
-            folders = knownFolders,
-            includeRoot = mode == TransferMode.MOVE,
+            folders = LibraryInteractionPolicy.folderDestinations(knownFolders, selectedFolderPaths),
+            includeRoot = mode == TransferMode.MOVE || selectedFolderPaths.isNotEmpty(),
             excludedFolders = emptySet(),
             onDismiss = { batchTransferMode = null },
             onSelect = { target ->
+                val paths = LibraryInteractionPolicy.topLevelFolders(selectedFolderPaths)
                 val ids = selectedBookIds.toList()
-                if (mode == TransferMode.COPY) {
+                paths.forEach { path ->
+                    if (mode == TransferMode.COPY) onCopyFolder(path, target) else onMoveFolder(path, target)
+                }
+                if (mode == TransferMode.COPY && ids.isNotEmpty()) {
                     onCopyBooks(ids, target)
-                } else {
+                } else if (ids.isNotEmpty()) {
                     onMoveBooks(ids, sourceFolder, target)
                 }
+                selectedFolderPaths = emptySet()
                 selectedBookIds = emptySet()
                 selectionMode = false
                 batchTransferMode = null
@@ -1016,14 +1067,16 @@ fun LibraryScreen(
         )
     }
 
-    if (batchDeleteConfirm && selectedBookIds.isNotEmpty()) {
-        val count = selectedBookIds.size
+    if (batchDeleteConfirm && selectedCount > 0) {
+        val count = selectedCount
         DestructiveConfirmDialog(
-            title = "Удалить выбранные книги?",
-            message = "Будет удалено книг: $count. Внутренние копии файлов и обложек тоже будут удалены. Это действие нельзя отменить.",
+            title = if (selectedFolderPaths.isNotEmpty()) "Удалить выбранные папки?" else "Удалить выбранные книги?",
+            message = if (selectedFolderPaths.isNotEmpty()) "Будет удалено папок: $count. Содержимое поднимется на уровень выше. Книги останутся в библиотеке." else "Будет удалено книг: $count. Внутренние копии файлов и обложек тоже будут удалены. Это действие нельзя отменить.",
             confirmLabel = "Удалить $count",
             onConfirm = {
-                onDeleteBooks(selectedBookIds.toList())
+                LibraryInteractionPolicy.topLevelFolders(selectedFolderPaths).forEach(onDeleteFolder)
+                if (selectedBookIds.isNotEmpty()) onDeleteBooks(selectedBookIds.toList())
+                selectedFolderPaths = emptySet()
                 selectedBookIds = emptySet()
                 selectionMode = false
                 batchDeleteConfirm = false
@@ -1098,6 +1151,7 @@ private fun BookActionsDialog(
 private fun FolderActionsDialog(
     folderPath: String,
     onDismiss: () -> Unit,
+    onSelect: () -> Unit,
     onOpen: () -> Unit,
     onCreateSubfolder: () -> Unit,
     onRename: () -> Unit,
@@ -1106,6 +1160,7 @@ private fun FolderActionsDialog(
     onDelete: () -> Unit,
 ) {
     LibraryActionsDialog(onDismiss) {
+        LibraryActionButton(Icons.Default.Check, "Выделить", onClick = onSelect)
         LibraryActionButton(Icons.Default.FolderOpen, "Открыть", onClick = onOpen)
         LibraryActionButton(Icons.Default.CreateNewFolder, "Новая подпапка", onClick = onCreateSubfolder)
         LibraryActionButton(Icons.Default.Edit, "Переименовать", onClick = onRename)
@@ -1524,6 +1579,7 @@ private fun LibrarySelectionActionsMenu(onClick: () -> Unit) {
 @Composable
 private fun LibrarySelectionActionsDialog(
     selectedCount: Int,
+    foldersSelected: Boolean,
     allVisibleSelected: Boolean,
     onDismiss: () -> Unit,
     onSelectAll: () -> Unit,
@@ -1539,12 +1595,12 @@ private fun LibrarySelectionActionsDialog(
             color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(10.dp))
         LibraryActionButton(Icons.Default.SelectAll,
             if (allVisibleSelected) "Снять выделение с видимых" else "Выделить все видимые", onClick = onSelectAll)
-        if (selectedCount == 1) {
+        if (selectedCount == 1 && !foldersSelected) {
             LibraryActionButton(Icons.Default.Edit, "Редактировать книгу", onClick = onEditSingle)
             LibraryActionButton(Icons.Default.MoreVert, "Другие действия с книгой", onClick = onManageSingle)
         }
-        LibraryActionButton(Icons.Default.ContentCopy, "Добавить в папку", onClick = onCopy)
-        LibraryActionButton(Icons.Default.CreateNewFolder, "Создать папку с выбранными", onClick = onCreateFolder)
+        LibraryActionButton(Icons.Default.ContentCopy, if (foldersSelected) "Копировать папки" else "Добавить в папку", onClick = onCopy)
+        if (!foldersSelected) LibraryActionButton(Icons.Default.CreateNewFolder, "Создать папку с выбранными", onClick = onCreateFolder)
         LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить в папку", onClick = onMove)
         LibraryActionButton(Icons.Default.DeleteOutline, "Удалить", destructive = true, onClick = onDelete)
     }
@@ -1567,6 +1623,8 @@ private fun FolderLibrary(
     onSpeed: (String) -> Unit,
     onManageBook: (BookRecord) -> Unit,
     onManageFolder: (String) -> Unit,
+    selectedFolderPaths: Set<String>,
+    onToggleFolderSelection: (String) -> Unit,
     selectedBookIds: Set<String>,
     selectionMode: Boolean,
     onToggleSelection: (BookRecord) -> Unit,
@@ -1608,7 +1666,8 @@ private fun FolderLibrary(
                 }
                 childFolders.forEach { folder ->
                     item(key = "folder:${folder.path}") {
-                        FolderTile(folder, compact = compact, onClick = { onFolder(folder.path) },
+                        FolderTile(folder, compact = compact, selected = folder.path in selectedFolderPaths,
+                            onClick = { if (selectionMode) onToggleFolderSelection(folder.path) else onFolder(folder.path) },
                             onManage = { onManageFolder(folder.path) })
                     }
                 }
@@ -1654,7 +1713,9 @@ private fun FolderLibrary(
             ) {
                 item(key = "folder-breadcrumb:$normalizedFolder") { FolderBreadcrumb(normalizedFolder, onFolder) }
                 items(childFolders, key = { "folder:${it.path}" }) { folder ->
-                    FolderRow(folder = folder, onClick = { onFolder(folder.path) }, onManage = { onManageFolder(folder.path) })
+                    FolderRow(folder = folder, selected = folder.path in selectedFolderPaths,
+                        onClick = { if (selectionMode) onToggleFolderSelection(folder.path) else onFolder(folder.path) },
+                        onManage = { onManageFolder(folder.path) })
                 }
                 items(directBooks, key = { "folder-book:${it.id}" }) { book ->
                     BookListCard(
@@ -1718,6 +1779,7 @@ private fun FolderBreadcrumb(currentFolder: String, onFolder: (String) -> Unit) 
 private fun FolderTile(
     folder: LibraryFolderSummary,
     compact: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
     onManage: () -> Unit,
 ) {
@@ -1742,8 +1804,11 @@ private fun FolderTile(
                 color = if (themed) LocalFluxThemeMode.current.chromeAccent else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    if (themed) ExperimentalPanel(Modifier.fillMaxWidth(), contentPadding = 0.dp) { tileContent() }
-    else Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { tileContent() }
+    Box(Modifier.testTag("folder:${folder.path}")) {
+        if (themed) ExperimentalPanel(Modifier.fillMaxWidth(), accent = selected, contentPadding = 0.dp) { tileContent() }
+        else Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { tileContent() }
+        if (selected) SelectionBadge(Modifier.align(Alignment.TopStart).padding(6.dp))
+    }
 }
 
 @Composable
@@ -1808,14 +1873,16 @@ private fun AudioLibraryCard(
 }
 
 @Composable
-private fun FolderRow(folder: LibraryFolderSummary, onClick: () -> Unit, onManage: () -> Unit) {
+private fun FolderRow(folder: LibraryFolderSummary, selected: Boolean, onClick: () -> Unit, onManage: () -> Unit) {
     if (LocalFluxThemeMode.current.isExperimentalChrome) {
         ExperimentalPanel(
-            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onManage),
+            modifier = Modifier.testTag("folder:${folder.path}").fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onManage),
             contentPadding = 10.dp,
+            accent = selected,
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (selected) SelectionBadge()
                 FluxThemedIcon(FluxIconRole.FOLDER, Icons.Default.Folder,
                     contentDescription = null, modifier = Modifier.size(34.dp))
                 Column(Modifier.weight(1f)) {
@@ -1836,7 +1903,7 @@ private fun FolderRow(folder: LibraryFolderSummary, onClick: () -> Unit, onManag
         return
     }
     Card(
-        modifier = Modifier
+        modifier = Modifier.testTag("folder:${folder.path}")
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onClick,
@@ -1848,6 +1915,7 @@ private fun FolderRow(folder: LibraryFolderSummary, onClick: () -> Unit, onManag
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (selected) SelectionBadge(Modifier.padding(end = 8.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,

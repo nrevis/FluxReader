@@ -12,4 +12,17 @@ internal object LibraryInteractionPolicy {
 
     fun longPressBook(selectedIds: Set<String>, selectionMode: Boolean, bookId: String) =
         BookLongPress(selectedIds + bookId, showActions = selectionMode)
+
+    /** A selected parent already includes its children; never process a subtree twice. */
+    fun topLevelFolders(paths: Set<String>): List<String> {
+        val normalized = paths.map(LibraryFolderTree::normalize).filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+        return normalized.filter { path ->
+            normalized.none { other -> !other.equals(path, ignoreCase = true) && LibraryFolderTree.isSameOrDescendant(path, other) }
+        }
+    }
+
+    fun folderDestinations(knownFolders: List<String>, selectedFolders: Set<String>): List<String> =
+        knownFolders.filter { target -> selectedFolders.none { LibraryFolderTree.isSameOrDescendant(target, it) } }
+
 }
