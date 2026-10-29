@@ -1,6 +1,6 @@
 {
-  "versionName": "0.2.0-alpha.110",
-  "versionCode": 20127,
+  "versionName": "0.2.0-alpha.111",
+  "versionCode": 20128,
   "line": "0.2-clean-rewrite",
-  "focus": "optional-boosty-support-all-features-free"
+  "focus": "library-context-menus-current-folder-import"
 }

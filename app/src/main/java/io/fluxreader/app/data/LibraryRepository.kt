@@ -72,24 +72,30 @@ class LibraryRepository(private val context: Context) {
 
     suspend fun importSource(
         uri: Uri,
+        destinationFolder: String = "",
         onProgress: (SourceImportProgress) -> Unit = {},
     ): SourceImportResult = withContext(Dispatchers.IO) {
         val name = displayName(uri).orEmpty().ifBlank { "book_${System.currentTimeMillis()}" }
         val mime = context.contentResolver.getType(uri)
         onProgress(SourceImportProgress(ImportPhase.PREPARING, label = name))
         if (ArchiveImportPolicy.isGenericZip(name, mime)) {
-            importArchiveInternal(uri, name, onProgress)
+            importArchiveInternal(uri, name, LibraryFolderTree.normalize(destinationFolder), onProgress)
         } else {
             onProgress(SourceImportProgress(ImportPhase.IMPORTING_BOOKS, label = name, current = 0, total = 1))
-            val outcome = importBookInternal(uri, folderPath = "")
-            if (!outcome.added) error("Книга уже есть в библиотеке: ${outcome.book.title}")
+            val outcome = importBookInternal(uri, folderPath = destinationFolder)
+            if (!outcome.added && !outcome.folderLinked) error("Книга уже есть в этой папке: ${outcome.book.title}")
             onProgress(SourceImportProgress(ImportPhase.IMPORTING_BOOKS, label = name, current = 1, total = 1))
-            SourceImportResult(added = 1, addedBookIds = listOf(outcome.book.id))
+            SourceImportResult(
+                added = if (outcome.added) 1 else 0,
+                linkedExisting = if (outcome.folderLinked) 1 else 0,
+                addedBookIds = if (outcome.added) listOf(outcome.book.id) else emptyList(),
+            )
         }
     }
 
     suspend fun importFolder(
         treeUri: Uri,
+        destinationFolder: String = "",
         onProgress: (SourceImportProgress) -> Unit = {},
     ): FolderImportResult = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
@@ -98,8 +104,9 @@ class LibraryRepository(private val context: Context) {
             .getOrElse { throw IllegalArgumentException("Не удалось открыть выбранную папку") }
         val rootUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
         val rootName = sanitizeFolderSegment(displayName(rootUri).orEmpty().ifBlank { "Папка" })
+        val rootPath = LibraryFolderTree.join(destinationFolder, rootName)
         onProgress(SourceImportProgress(ImportPhase.SCANNING_FOLDER, label = rootName))
-        val foldersSeen = linkedSetOf(rootName)
+        val foldersSeen = linkedSetOf(rootPath)
         val addedIds = mutableListOf<String>()
         var added = 0
         var linkedExisting = 0
@@ -107,7 +114,7 @@ class LibraryRepository(private val context: Context) {
         var firstError = ""
         var visitedDocuments = 0
         val stack = ArrayDeque<FolderCursor>()
-        stack.add(FolderCursor(rootId, rootName, 0))
+        stack.add(FolderCursor(rootId, rootPath, 0))
 
         while (stack.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
@@ -303,11 +310,12 @@ class LibraryRepository(private val context: Context) {
     private suspend fun importArchiveInternal(
         uri: Uri,
         displayName: String,
+        destinationFolder: String,
         onProgress: (SourceImportProgress) -> Unit,
     ): SourceImportResult {
-        val archiveRoot = sanitizeFolderSegment(
+        val archiveRoot = LibraryFolderTree.join(destinationFolder, sanitizeFolderSegment(
             displayName.replace(Regex("(?i)\\.zip$"), "").ifBlank { "Архив" },
-        )
+        ))
         val foldersSeen = linkedSetOf<String>()
         val addedIds = mutableListOf<String>()
         var added = 0

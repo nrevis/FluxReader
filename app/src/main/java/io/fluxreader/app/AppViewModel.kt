@@ -502,7 +502,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importBook(uri: Uri) = importBooks(listOf(uri))
 
-    fun importBooks(uris: List<Uri>) {
+    fun importBooks(uris: List<Uri>, destinationFolder: String = "") {
         if (uris.isEmpty()) return
         if (importJob?.isActive == true) {
             _message.value = "Импорт уже выполняется"
@@ -526,7 +526,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 distinctUris.forEachIndexed { index, uri ->
                     currentCoroutineContext().ensureActive()
                     try {
-                        val result = libraryRepository.importSource(uri) { progress ->
+                        val result = libraryRepository.importSource(uri, destinationFolder) { progress ->
                             publishImportProgress(progress, index, distinctUris.size)
                         }
                         added += result.added
@@ -559,7 +559,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun importFolder(treeUri: Uri) {
+    fun importFolder(treeUri: Uri, destinationFolder: String = "") {
         if (importJob?.isActive == true) {
             _message.value = "Импорт уже выполняется"
             return
@@ -572,7 +572,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             },
         ) {
             try {
-                val result = libraryRepository.importFolder(treeUri) { progress ->
+                val result = libraryRepository.importFolder(treeUri, destinationFolder) { progress ->
                     publishImportProgress(progress)
                 }
                 result.addedBookIds.forEach { id -> libraryRepository.find(id)?.let(::prepareMetadata) }

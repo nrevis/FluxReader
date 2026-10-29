@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -105,6 +108,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
@@ -169,8 +174,8 @@ fun LibraryScreen(
     settings: ReaderSettings,
     importState: ImportUiState,
     onCancelImport: () -> Unit,
-    onImport: (List<Uri>) -> Unit,
-    onImportFolder: (Uri) -> Unit,
+    onImport: (List<Uri>, String) -> Unit,
+    onImportFolder: (Uri, String) -> Unit,
     onOpen: (String) -> Unit,
     onSpeed: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -218,25 +223,29 @@ fun LibraryScreen(
     var exportingBookId by remember { mutableStateOf<String?>(null) }
     var selectedBookIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var selectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectionActionsVisible by remember { mutableStateOf(false) }
+    var emptyAreaActionsVisible by remember { mutableStateOf(false) }
+    val destinationFolder = LibraryInteractionPolicy.destinationFolder(settings.libraryGroupMode, currentFolder)
+    // Freeze the destination before leaving the app for any system document picker.
+    var pendingImportFolder by rememberSaveable { mutableStateOf("") }
     var batchTransferMode by remember { mutableStateOf<TransferMode?>(null) }
     var batchDeleteConfirm by remember { mutableStateOf(false) }
     var createSelectedFolderParent by remember { mutableStateOf<String?>(null) }
     var movingAudioId by remember { mutableStateOf<String?>(null) }
     var deletingAudioId by remember { mutableStateOf<String?>(null) }
     val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) onImport(uris)
+        if (uris.isNotEmpty()) onImport(uris, pendingImportFolder)
     }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
-            val folder = if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && query.isBlank()) currentFolder else ""
-            onImportAudio(uris, folder)
+            onImportAudio(uris, pendingImportFolder)
         }
     }
     val archivePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) onImport(listOf(uri))
+        if (uri != null) onImport(listOf(uri), pendingImportFolder)
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) onImportFolder(uri)
+        if (uri != null) onImportFolder(uri, pendingImportFolder)
     }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val book = editingBook
@@ -327,7 +336,9 @@ fun LibraryScreen(
         selectedBookIds = if (book.id in selectedBookIds) selectedBookIds - book.id else selectedBookIds + book.id
     }
     val startSelection: (BookRecord) -> Unit = { book ->
-        selectedBookIds = selectedBookIds + book.id
+        val result = LibraryInteractionPolicy.longPressBook(selectedBookIds, selectionMode, book.id)
+        selectedBookIds = result.selectedIds
+        selectionActionsVisible = result.showActions
         selectionMode = true
         libraryFocusManager.clearFocus(force = true)
         libraryKeyboardController?.hide()
@@ -338,12 +349,16 @@ fun LibraryScreen(
         selectionMode = false
         batchTransferMode = null
         batchDeleteConfirm = false
+        selectionActionsVisible = false
     }
 
     LaunchedEffect(books) {
         val existing = books.mapTo(hashSetOf()) { it.id }
         selectedBookIds = selectedBookIds.filterTo(linkedSetOf()) { it in existing }
-        if (selectionMode && selectedBookIds.isEmpty()) selectionMode = false
+        if (selectionMode && selectedBookIds.isEmpty()) {
+            selectionMode = false
+            selectionActionsVisible = false
+        }
     }
 
     if (importChooserVisible) {
@@ -354,27 +369,31 @@ fun LibraryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     LibraryActionButton(Icons.AutoMirrored.Filled.InsertDriveFile, "Книги", "EPUB, FB2, PDF или TXT") {
                         importChooserVisible = false
+                        pendingImportFolder = destinationFolder
                         importPicker.launch(arrayOf("*/*"))
                     }
                     LibraryActionButton(Icons.Default.FolderZip, "Архив ZIP", "Импорт всех поддерживаемых книг внутри") {
                         importChooserVisible = false
+                        pendingImportFolder = destinationFolder
                         archivePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
                     }
                     LibraryActionButton(Icons.Default.MusicNote, "Аудиокниги", "MP3, M4B, M4A, WAV, FLAC и другие") {
                         importChooserVisible = false
+                        pendingImportFolder = destinationFolder
                         audioPicker.launch(arrayOf("audio/*", "application/octet-stream"))
                     }
                     LibraryActionButton(Icons.Default.FolderOpen, "Папка", "Импорт с подпапками") {
                         importChooserVisible = false
+                        pendingImportFolder = destinationFolder
                         folderPicker.launch(null)
                     }
                     LibraryActionButton(
                         Icons.Default.CreateNewFolder,
                         "Новая папка",
-                        if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && currentFolder.isNotBlank()) "В текущей папке" else "В библиотеке",
+                        if (destinationFolder.isNotBlank()) "В текущей папке" else "В библиотеке",
                     ) {
                         importChooserVisible = false
-                        createFolderParent = if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && query.isBlank()) currentFolder else ""
+                        createFolderParent = destinationFolder
                     }
                 }
             },
@@ -385,7 +404,10 @@ fun LibraryScreen(
     }
 
     val libraryContent: @Composable (PaddingValues) -> Unit = { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).testTag("library-content").pointerInput(Unit) {
+            // Child controls/cards consume their gestures; only unused library space reaches here.
+            detectTapGestures(onLongPress = { emptyAreaActionsVisible = true })
+        }) {
             if (importState.active) {
                 ImportProgressCard(
                     state = importState,
@@ -599,21 +621,7 @@ fun LibraryScreen(
                 subtitle = if (selectionMode) "Выбор книг" else "Книг: ${books.size} · ${libraryViewLabel(settings.libraryViewMode)}",
                 actions = {
                     if (selectionMode) {
-                        LibrarySelectionActionsMenu(
-                            selectedCount = selectedBookIds.size,
-                            allVisibleSelected = selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds),
-                            onSelectAll = {
-                                selectedBookIds = if (selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds)) {
-                                    selectedBookIds - selectableBookIds
-                                } else selectedBookIds + selectableBookIds
-                            },
-                            onCopy = { batchTransferMode = TransferMode.COPY },
-                            onCreateFolder = { createSelectedFolderParent = if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && query.isBlank()) currentFolder else "" },
-                            onMove = { batchTransferMode = TransferMode.MOVE },
-                            onDelete = { batchDeleteConfirm = true },
-                            onEditSingle = { books.firstOrNull { it.id in selectedBookIds }?.let { editingBook = it }; selectedBookIds = emptySet(); selectionMode = false },
-                            onManageSingle = { books.firstOrNull { it.id in selectedBookIds }?.let { managingBook = it }; selectedBookIds = emptySet(); selectionMode = false },
-                        )
+                        LibrarySelectionActionsMenu(onClick = { selectionActionsVisible = true })
                         IconButton(onClick = { selectedBookIds = emptySet(); selectionMode = false }) {
                             Icon(Icons.Default.Close, contentDescription = "Закончить выделение", tint = LocalFluxThemeMode.current.chromeText)
                         }
@@ -685,21 +693,7 @@ fun LibraryScreen(
                     },
                     actions = {
                         if (selectionMode) {
-                            LibrarySelectionActionsMenu(
-                                selectedCount = selectedBookIds.size,
-                                allVisibleSelected = selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds),
-                                onSelectAll = {
-                                    selectedBookIds = if (selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds)) {
-                                        selectedBookIds - selectableBookIds
-                                    } else selectedBookIds + selectableBookIds
-                                },
-                                onCopy = { batchTransferMode = TransferMode.COPY },
-                            onCreateFolder = { createSelectedFolderParent = if (settings.libraryGroupMode == LibraryGroupMode.FOLDER && query.isBlank()) currentFolder else "" },
-                                onMove = { batchTransferMode = TransferMode.MOVE },
-                                onDelete = { batchDeleteConfirm = true },
-                                onEditSingle = { books.firstOrNull { it.id in selectedBookIds }?.let { editingBook = it }; selectedBookIds = emptySet(); selectionMode = false },
-                                onManageSingle = { books.firstOrNull { it.id in selectedBookIds }?.let { managingBook = it }; selectedBookIds = emptySet(); selectionMode = false },
-                            )
+                            LibrarySelectionActionsMenu(onClick = { selectionActionsVisible = true })
                             IconButton(onClick = { selectedBookIds = emptySet(); selectionMode = false }) {
                                 Icon(Icons.Default.Close, contentDescription = "Закончить выделение")
                             }
@@ -751,6 +745,62 @@ fun LibraryScreen(
         }
     }
 
+
+    if (emptyAreaActionsVisible) {
+        LibraryActionsDialog(onDismiss = { emptyAreaActionsVisible = false }) {
+            LibraryActionButton(Icons.Default.Add, "Добавить книги", enabled = !importState.active) {
+                emptyAreaActionsVisible = false
+                importChooserVisible = true
+            }
+            LibraryActionButton(Icons.Default.CreateNewFolder, "Новая папка") {
+                emptyAreaActionsVisible = false
+                createFolderParent = destinationFolder
+            }
+            LibraryActionButton(Icons.Default.SelectAll, "Выделить все видимые", enabled = selectableBookIds.isNotEmpty()) {
+                emptyAreaActionsVisible = false
+                selectedBookIds = selectedBookIds + selectableBookIds
+                selectionMode = true
+            }
+            if (canUndoLibraryOperation) {
+                LibraryActionButton(Icons.AutoMirrored.Filled.Undo, "Отменить последнее действие") {
+                    emptyAreaActionsVisible = false
+                    onUndoLibraryOperation()
+                }
+            }
+        }
+    }
+
+    if (selectionActionsVisible && selectedBookIds.isNotEmpty()) {
+        fun runSelectionAction(action: () -> Unit) {
+            selectionActionsVisible = false
+            action()
+        }
+        LibrarySelectionActionsDialog(
+            selectedCount = selectedBookIds.size,
+            allVisibleSelected = selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds),
+            onDismiss = { selectionActionsVisible = false },
+            onSelectAll = {
+                runSelectionAction {
+                    selectedBookIds = if (selectableBookIds.isNotEmpty() && selectedBookIds.containsAll(selectableBookIds)) {
+                        selectedBookIds - selectableBookIds
+                    } else selectedBookIds + selectableBookIds
+                    if (selectedBookIds.isEmpty()) selectionMode = false
+                }
+            },
+            onCopy = { runSelectionAction { batchTransferMode = TransferMode.COPY } },
+            onCreateFolder = { runSelectionAction { createSelectedFolderParent = destinationFolder } },
+            onMove = { runSelectionAction { batchTransferMode = TransferMode.MOVE } },
+            onDelete = { runSelectionAction { batchDeleteConfirm = true } },
+            onEditSingle = { runSelectionAction {
+                books.firstOrNull { it.id in selectedBookIds }?.let { editingBook = it }
+                selectedBookIds = emptySet(); selectionMode = false
+            } },
+            onManageSingle = { runSelectionAction {
+                books.firstOrNull { it.id in selectedBookIds }?.let { managingBook = it }
+                selectedBookIds = emptySet(); selectionMode = false
+            } },
+        )
+    }
 
     movingAudioId?.let { id ->
         FolderDestinationDialog(
@@ -1009,6 +1059,22 @@ fun LibraryScreen(
 }
 
 @Composable
+private fun LibraryActionsDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        val actions: @Composable () -> Unit = {
+            Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()).padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)) { content() }
+        }
+        if (LocalFluxThemeMode.current.isExperimentalChrome) {
+            ExperimentalPanel(Modifier.width(292.dp), accent = true, contentPadding = 6.dp) { actions() }
+        } else {
+            Surface(modifier = Modifier.width(292.dp), shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) { actions() }
+        }
+    }
+}
+
+@Composable
 private fun BookActionsDialog(
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
@@ -1018,23 +1084,13 @@ private fun BookActionsDialog(
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        val actions: @Composable () -> Unit = {
-            Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                LibraryActionButton(Icons.Default.Edit, "Изменить", onClick = onEdit)
-                LibraryActionButton(Icons.Default.ContentCopy, "Копировать", onClick = onCopy)
-                LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить", onClick = onMove)
-                LibraryActionButton(Icons.Default.FileCopy, "Дубликат", onClick = onDuplicate)
-                LibraryActionButton(Icons.Default.IosShare, "Экспорт", onClick = onExport)
-                LibraryActionButton(Icons.Default.DeleteOutline, "Удалить", destructive = true, onClick = onDelete)
-            }
-        }
-        if (LocalFluxThemeMode.current.isExperimentalChrome) {
-            ExperimentalPanel(Modifier.width(268.dp), accent = true, contentPadding = 6.dp) { actions() }
-        } else {
-            Surface(modifier = Modifier.width(268.dp), shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) { actions() }
-        }
+    LibraryActionsDialog(onDismiss) {
+        LibraryActionButton(Icons.Default.Edit, "Изменить", onClick = onEdit)
+        LibraryActionButton(Icons.Default.ContentCopy, "Копировать", onClick = onCopy)
+        LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить", onClick = onMove)
+        LibraryActionButton(Icons.Default.FileCopy, "Дубликат", onClick = onDuplicate)
+        LibraryActionButton(Icons.Default.IosShare, "Экспорт", onClick = onExport)
+        LibraryActionButton(Icons.Default.DeleteOutline, "Удалить", destructive = true, onClick = onDelete)
     }
 }
 
@@ -1049,23 +1105,13 @@ private fun FolderActionsDialog(
     onMove: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        val actions: @Composable () -> Unit = {
-            Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                LibraryActionButton(Icons.Default.FolderOpen, "Открыть", onClick = onOpen)
-                LibraryActionButton(Icons.Default.CreateNewFolder, "Новая подпапка", onClick = onCreateSubfolder)
-                LibraryActionButton(Icons.Default.Edit, "Переименовать", onClick = onRename)
-                LibraryActionButton(Icons.Default.ContentCopy, "Копировать", onClick = onCopy)
-                LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить", onClick = onMove)
-                LibraryActionButton(Icons.Default.FolderDelete, "Удалить", destructive = true, onClick = onDelete)
-            }
-        }
-        if (LocalFluxThemeMode.current.isExperimentalChrome) {
-            ExperimentalPanel(Modifier.fillMaxWidth(), accent = true, contentPadding = 6.dp) { actions() }
-        } else {
-            Surface(modifier = Modifier.width(268.dp), shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) { actions() }
-        }
+    LibraryActionsDialog(onDismiss) {
+        LibraryActionButton(Icons.Default.FolderOpen, "Открыть", onClick = onOpen)
+        LibraryActionButton(Icons.Default.CreateNewFolder, "Новая подпапка", onClick = onCreateSubfolder)
+        LibraryActionButton(Icons.Default.Edit, "Переименовать", onClick = onRename)
+        LibraryActionButton(Icons.Default.ContentCopy, "Копировать", onClick = onCopy)
+        LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить", onClick = onMove)
+        LibraryActionButton(Icons.Default.FolderDelete, "Удалить", destructive = true, onClick = onDelete)
     }
 }
 
@@ -1075,6 +1121,7 @@ private fun LibraryActionButton(
     label: String,
     supporting: String = "",
     destructive: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val actionColor = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1086,18 +1133,21 @@ private fun LibraryActionButton(
             .clip(shape)
             .then(if (themed) Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f), shape) else Modifier)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 10.dp, vertical = if (supporting.isBlank()) 8.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp),
-            tint = if (themed && !destructive) LocalFluxThemeMode.current.chromeAccent else actionColor)
+            tint = (if (themed && !destructive) LocalFluxThemeMode.current.chromeAccent else actionColor)
+                .copy(alpha = if (enabled) 1f else 0.38f))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (destructive) actionColor else MaterialTheme.colorScheme.onSurface,
+                color = (if (destructive) actionColor else MaterialTheme.colorScheme.onSurface)
+                    .copy(alpha = if (enabled) 1f else 0.38f),
             )
             if (supporting.isNotBlank()) {
                 Text(
@@ -1461,11 +1511,21 @@ private fun groupIcon(mode: LibraryGroupMode): ImageVector = when (mode) {
     LibraryGroupMode.AUTHOR -> Icons.Default.Person
 }
 
-/** Actions are deliberately placed in the top-bar overflow menu for all three visual themes. */
+/** The toolbar and long press share one themed dialog. */
 @Composable
-private fun LibrarySelectionActionsMenu(
+private fun LibrarySelectionActionsMenu(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Default.MoreVert, contentDescription = "Действия с выделенными книгами",
+            tint = if (LocalFluxThemeMode.current.isExperimentalChrome) LocalFluxThemeMode.current.chromeText
+                else MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun LibrarySelectionActionsDialog(
     selectedCount: Int,
     allVisibleSelected: Boolean,
+    onDismiss: () -> Unit,
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
     onCreateFolder: () -> Unit,
@@ -1474,54 +1534,19 @@ private fun LibrarySelectionActionsMenu(
     onEditSingle: () -> Unit,
     onManageSingle: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Действия с выделенными книгами")
+    LibraryActionsDialog(onDismiss) {
+        Text("Выбрано: $selectedCount", style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(10.dp))
+        LibraryActionButton(Icons.Default.SelectAll,
+            if (allVisibleSelected) "Снять выделение с видимых" else "Выделить все видимые", onClick = onSelectAll)
+        if (selectedCount == 1) {
+            LibraryActionButton(Icons.Default.Edit, "Редактировать книгу", onClick = onEditSingle)
+            LibraryActionButton(Icons.Default.MoreVert, "Другие действия с книгой", onClick = onManageSingle)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(if (allVisibleSelected) "Снять выделение с видимых" else "Выделить все видимые") },
-                leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
-                onClick = { expanded = false; onSelectAll() },
-            )
-            DropdownMenuItem(
-                text = { Text("Редактировать книгу") },
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                enabled = selectedCount == 1,
-                onClick = { expanded = false; onEditSingle() },
-            )
-            DropdownMenuItem(
-                text = { Text("Другие действия с книгой") },
-                leadingIcon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
-                enabled = selectedCount == 1,
-                onClick = { expanded = false; onManageSingle() },
-            )
-            DropdownMenuItem(
-                text = { Text("Добавить в папку (${selectedCount})") },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                enabled = selectedCount > 0,
-                onClick = { expanded = false; onCopy() },
-            )
-            DropdownMenuItem(
-                text = { Text("Создать папку с выбранными (${selectedCount})") },
-                leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
-                enabled = selectedCount > 0,
-                onClick = { expanded = false; onCreateFolder() },
-            )
-            DropdownMenuItem(
-                text = { Text("Переместить в папку (${selectedCount})") },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null) },
-                enabled = selectedCount > 0,
-                onClick = { expanded = false; onMove() },
-            )
-            DropdownMenuItem(
-                text = { Text("Удалить (${selectedCount})") },
-                leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-                enabled = selectedCount > 0,
-                onClick = { expanded = false; onDelete() },
-            )
-        }
+        LibraryActionButton(Icons.Default.ContentCopy, "Добавить в папку", onClick = onCopy)
+        LibraryActionButton(Icons.Default.CreateNewFolder, "Создать папку с выбранными", onClick = onCreateFolder)
+        LibraryActionButton(Icons.AutoMirrored.Filled.DriveFileMove, "Переместить в папку", onClick = onMove)
+        LibraryActionButton(Icons.Default.DeleteOutline, "Удалить", destructive = true, onClick = onDelete)
     }
 }
 

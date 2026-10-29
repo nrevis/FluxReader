@@ -1028,7 +1028,7 @@ grep -q 'MAX_BOOK_BYTES = 512L' "$ARCHIVE_POLICY"
 grep -q 'segments.any { it == ".." }' "$ARCHIVE_POLICY"
 grep -q 'ZipFile(tempArchive)' "$LIBRARY_REPO"
 grep -q 'suspend fun importSource(' "$LIBRARY_REPO"
-grep -q 'importArchiveInternal(uri, name, onProgress)' "$LIBRARY_REPO"
+grep -q 'importArchiveInternal(uri, name, LibraryFolderTree.normalize(destinationFolder), onProgress)' "$LIBRARY_REPO"
 grep -q '"Архив ZIP"' "$LIBRARY_UI" || {
   echo "❌ alpha.45: library import chooser does not expose ZIP archive import"
   exit 80
@@ -1173,7 +1173,8 @@ book_end = text.index('private fun FolderActionsDialog(', book_start)
 menu = text[book_start:book_end]
 if 'Text(book.title' in menu or 'supporting' in menu or '"Открыть"' in menu or '"Скорочтение"' in menu:
     raise SystemExit('❌ alpha.48: book action popup is not compact')
-if 'modifier = Modifier.width(268.dp)' not in menu:
+surface = text[text.index('private fun LibraryActionsDialog('):book_start]
+if 'LibraryActionsDialog(onDismiss)' not in menu or 'modifier = Modifier.width(292.dp)' not in surface:
     raise SystemExit('❌ alpha.48: compact popup width guard missing')
 if text.count('CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy') < 4:
     raise SystemExit('❌ alpha.48: theme-tinted library cards missing')
